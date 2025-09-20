@@ -1,0 +1,16 @@
+{
+  "name": "@freeflow/token-swap-plugin",
+  "version": "1.0.0",
+  "description": "Token swap plugin for Free Flow DEX on Flow blockchain",
+  "main": "dist/TokenSwapPlugin.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "keywords": ["flow", "blockchain", "defi", "swap", "dex"],
+  "author": "Free Flow Team",
+  "license": "MIT",
+  "dependencies": {
+    "typescript": "^5.9.2"
+  }
+}
