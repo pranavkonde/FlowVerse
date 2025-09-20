@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NEXT_PUBLIC_SOCKET_URL=http://localhost:3002
+      - NEXT_PUBLIC_PRIVY_APP_ID=${PRIVY_APP_ID}
+      - NEXT_PUBLIC_FLOW_RPC_URL=https://testnet.evm.nodes.onflow.org
+      - NEXT_PUBLIC_FLOW_CHAIN_ID=545
+    depends_on:
+      - backend
+      - agent
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: pnpm dev
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - FRONTEND_URL=http://localhost:3001
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: npm run dev
+
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - RPC_PROVIDER_URL=https://testnet.evm.nodes.onflow.org
+      - WALLET_PRIVATE_KEY=${WALLET_PRIVATE_KEY}
+      - COINGECKO_API_KEY=${COINGECKO_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./agent:/app
+      - /app/node_modules
+    command: pnpm dev
+
+  # Optional: Add a database service if needed
+  # postgres:
+  #   image: postgres:15
+  #   environment:
+  #     - POSTGRES_DB=freeflow
+  #     - POSTGRES_USER=freeflow
+  #     - POSTGRES_PASSWORD=freeflow
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+
+# volumes:
+#   postgres_data:
