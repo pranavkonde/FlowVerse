@@ -1,0 +1,24 @@
+{
+  "name": "@freeflow/contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for Free Flow DEX on Flow blockchain",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:testnet": "hardhat run scripts/deploy.js --network flow-testnet",
+    "deploy:mainnet": "hardhat run scripts/deploy.js --network flow-mainnet",
+    "verify": "hardhat verify --network flow-testnet"
+  },
+  "keywords": ["flow", "blockchain", "defi", "dex", "smart-contracts"],
+  "author": "Free Flow Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.0.0",
+    "hardhat": "^2.22.0"
+  },
+  "dependencies": {
+    "ethers": "^6.0.0"
+  }
+}
