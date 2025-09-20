@@ -6,6 +6,7 @@ import Phaser from 'phaser';
 import { GameScene } from '@/scenes/GameScene';
 import { useSocket } from '@/hooks/useSocket';
 import { useGameState } from '@/hooks/useGameState';
+import VoiceCommand from './VoiceCommand';
 
 export default function Game() {
   const gameRef = useRef<HTMLDivElement>(null);
@@ -13,6 +14,7 @@ export default function Game() {
   const { user } = usePrivy();
   const { socket, isConnected } = useSocket();
   const { gameState, updateGameState } = useGameState();
+  const [voiceCommand, setVoiceCommand] = useState<string>('');
 
   useEffect(() => {
     if (!gameRef.current || phaserGameRef.current) return;
@@ -69,13 +71,50 @@ export default function Game() {
         console.log('Player left:', playerId);
       });
 
+      socket.on('voice-command', (data) => {
+        console.log('Voice command from another player:', data);
+      });
+
       return () => {
         socket.off('game-update');
         socket.off('player-joined');
         socket.off('player-left');
+        socket.off('voice-command');
       };
     }
   }, [socket, user, gameState.roomCode, updateGameState]);
+
+  // Handle voice command processing
+  const handleVoiceCommand = async (command: string) => {
+    setVoiceCommand(command);
+    
+    // Send to agent for processing
+    try {
+      const response = await fetch('http://localhost:3003/api/voice-command', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          command,
+          userId: user?.id
+        })
+      });
+      
+      const result = await response.json();
+      console.log('Voice command result:', result);
+      
+      // Broadcast to other players
+      if (socket) {
+        socket.emit('voice-command', {
+          userId: user?.id,
+          command: result.response
+        });
+      }
+    } catch (error) {
+      console.error('Error processing voice command:', error);
+    }
+  };
 
   return (
     <div className="w-full h-screen flex flex-col">
@@ -115,6 +154,11 @@ export default function Game() {
               <div>Space - Voice Command</div>
             </div>
           </div>
+          
+          <VoiceCommand 
+            onCommand={handleVoiceCommand}
+            className="w-80"
+          />
         </div>
       </div>
     </div>
