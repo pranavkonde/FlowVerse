@@ -233,12 +233,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Phaser.js for 2D game development
 - GOAT SDK for blockchain operations
 
-## 📞 Support
-
-For support, email support@freeflow.xyz or join our Discord community.
-
----
-
 **Built with ❤️ for the Flow ecosystem**
 
 
