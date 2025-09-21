@@ -5,6 +5,13 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { GameService } from './services/GameService';
 import { GameController } from './controllers/GameController';
+import { 
+  securityHeaders, 
+  createRateLimit, 
+  requestLogger, 
+  errorHandler, 
+  corsOptions 
+} from './middleware/security';
 
 // Load environment variables
 dotenv.config();
@@ -18,9 +25,18 @@ const io = new Server(server, {
   }
 });
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Security middleware
+app.use(securityHeaders);
+app.use(requestLogger);
+
+// Rate limiting
+app.use(createRateLimit(15 * 60 * 1000, 100)); // 100 requests per 15 minutes
+app.use('/api/', createRateLimit(60 * 1000, 20)); // 20 API requests per minute
+
+// CORS and parsing
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Initialize services
 const gameService = new GameService();
@@ -90,6 +106,17 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 const PORT = process.env.PORT || 3002;
+
+// Error handling middleware
+app.use(errorHandler);
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'Endpoint not found'
+  });
+});
 
 server.listen(PORT, () => {
   console.log(`🚀 Free Flow Backend Server running on port ${PORT}`);
