@@ -141,3 +141,4 @@ export default function Chat({ messages, onSendMessage, isOpen, onToggle, player
     </div>
   );
 }
+

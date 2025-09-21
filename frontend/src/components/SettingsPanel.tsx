@@ -205,3 +205,4 @@ export default function SettingsPanel({ isOpen, onToggle, settings, onSettingsCh
     </div>
   );
 }
+

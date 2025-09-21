@@ -95,3 +95,4 @@ export default function NotificationSystem({ notifications, onRemove }: Notifica
     </div>
   );
 }
+

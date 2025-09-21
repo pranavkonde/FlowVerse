@@ -237,3 +237,4 @@ contract FreeFlowStaking is ReentrancyGuard, Ownable {
         payable(owner()).transfer(_amount);
     }
 }
+

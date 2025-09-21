@@ -158,3 +158,4 @@ export default function VoiceCommand({ onCommand, onError, className = '' }: Voi
     </div>
   );
 }
+
