@@ -6,7 +6,9 @@ import Phaser from 'phaser';
 import { GameScene } from '@/scenes/GameScene';
 import { useSocket } from '@/hooks/useSocket';
 import { useGameState } from '@/hooks/useGameState';
+import { useTouchControls } from '@/hooks/useTouchControls';
 import VoiceCommand from './VoiceCommand';
+import MobileControls from './MobileControls';
 
 export default function Game() {
   const gameRef = useRef<HTMLDivElement>(null);
@@ -14,7 +16,9 @@ export default function Game() {
   const { user } = usePrivy();
   const { socket, isConnected } = useSocket();
   const { gameState, updateGameState } = useGameState();
+  const { isMobile } = useTouchControls();
   const [voiceCommand, setVoiceCommand] = useState<string>('');
+  const [showMobileControls, setShowMobileControls] = useState(false);
 
   useEffect(() => {
     if (!gameRef.current || phaserGameRef.current) return;
@@ -116,6 +120,33 @@ export default function Game() {
     }
   };
 
+  // Handle mobile movement
+  const handleMobileMove = (direction: 'up' | 'down' | 'left' | 'right') => {
+    // Send movement to game scene
+    if (phaserGameRef.current) {
+      const scene = phaserGameRef.current.scene.getScene('GameScene') as GameScene;
+      if (scene) {
+        // Trigger movement in the game scene
+        scene.handleMobileMove(direction);
+      }
+    }
+  };
+
+  // Handle mobile emote
+  const handleMobileEmote = () => {
+    if (phaserGameRef.current) {
+      const scene = phaserGameRef.current.scene.getScene('GameScene') as GameScene;
+      if (scene) {
+        scene.showEmote('wave');
+      }
+    }
+  };
+
+  // Toggle mobile controls visibility
+  const toggleMobileControls = () => {
+    setShowMobileControls(!showMobileControls);
+  };
+
   return (
     <div className="w-full h-screen flex flex-col">
       {/* Game Header */}
@@ -160,6 +191,27 @@ export default function Game() {
             className="w-80"
           />
         </div>
+
+        {/* Mobile Controls Toggle */}
+        {isMobile && (
+          <div className="absolute bottom-4 right-4">
+            <button
+              onClick={toggleMobileControls}
+              className="bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg"
+            >
+              {showMobileControls ? 'Hide Controls' : 'Show Controls'}
+            </button>
+          </div>
+        )}
+
+        {/* Mobile Controls */}
+        <MobileControls
+          onMove={handleMobileMove}
+          onEmote={handleMobileEmote}
+          onVoiceCommand={() => {/* Voice command handled by VoiceCommand component */}}
+          onChat={() => {/* Chat functionality */}}
+          isVisible={isMobile && showMobileControls}
+        />
       </div>
     </div>
   );

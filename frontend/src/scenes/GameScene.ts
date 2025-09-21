@@ -224,4 +224,27 @@ export class GameScene extends Phaser.Scene {
       }
     });
   }
+
+  public handleMobileMove(direction: 'up' | 'down' | 'left' | 'right') {
+    const speed = 200;
+    let velocityX = 0;
+    let velocityY = 0;
+
+    switch (direction) {
+      case 'left':
+        velocityX = -speed;
+        break;
+      case 'right':
+        velocityX = speed;
+        break;
+      case 'up':
+        velocityY = -speed;
+        break;
+      case 'down':
+        velocityY = speed;
+        break;
+    }
+
+    this.player.setVelocity(velocityX, velocityY);
+  }
 }
