@@ -86,6 +86,8 @@ This comprehensive multiplayer 2D virtual NYC skyscraper environment consists of
 - **FreeFlowToken.cdc**: Fungible token contract with minting and burning
 - **FreeFlowNFT.cdc**: Non-fungible token contract for in-game items
 - **FreeFlowMarketplace.cdc**: Trading marketplace with listings and offers
+- **FreeFlowStaking.cdc**: Time-locked staking system with reward mechanisms
+- **FreeFlowGovernance.cdc**: Community governance system for protocol decisions
 - **Deployment Scripts**: Automated contract deployment and configuration
 - **Test Suite**: Comprehensive testing for all contract functions
 
@@ -320,7 +322,9 @@ FlowVerse/
 │   │   ├── contracts/      # Contract files
 │   │   │   ├── FreeFlowToken.cdc
 │   │   │   ├── FreeFlowNFT.cdc
-│   │   │   └── FreeFlowMarketplace.cdc
+│   │   │   ├── FreeFlowMarketplace.cdc
+│   │   │   ├── FreeFlowStaking.cdc
+│   │   │   └── FreeFlowGovernance.cdc
 │   │   ├── scripts/        # Query scripts
 │   │   ├── transactions/   # Transaction files
 │   │   ├── tests/          # Test files
@@ -358,6 +362,8 @@ The project includes comprehensive Cadence smart contracts for the Flow blockcha
    flow deploy contracts/FreeFlowToken.cdc
    flow deploy contracts/FreeFlowNFT.cdc
    flow deploy contracts/FreeFlowMarketplace.cdc
+   flow deploy contracts/FreeFlowStaking.cdc
+   flow deploy contracts/FreeFlowGovernance.cdc
    ```
 
 2. **Configure Contracts**:
@@ -418,9 +424,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📊 Project Statistics
 
-- **Total Commits**: 41+ (and growing)
-- **Lines of Code**: 10,000+ across all components
-- **Smart Contracts**: 3 Cadence contracts with comprehensive testing
+- **Total Commits**: 18+ (and growing)
+- **Lines of Code**: 12,000+ across all components
+- **Smart Contracts**: 5 Cadence contracts with comprehensive testing
 - **Frontend Components**: 15+ React components
 - **Backend Services**: 8+ microservices
 - **API Endpoints**: 20+ RESTful endpoints
@@ -446,6 +452,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [x] NFT system
 - [x] Token economy
 - [x] DeFi features
+- [x] Staking system with time-locked rewards
+- [x] Community governance system
 
 ### Phase 4: Enhanced Gameplay 🚧
 - [ ] Advanced AI NPCs
