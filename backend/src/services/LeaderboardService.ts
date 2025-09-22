@@ -1,207 +1,317 @@
-import { Player } from '../types/game';
+import { LeaderboardEntry, LeaderboardCategory, LeaderboardTimeframe } from '../types/leaderboard';
 
-export interface LeaderboardEntry {
-  playerId: string;
-  username: string;
-  score: number;
-  level: number;
-  achievements: string[];
-  lastActive: Date;
-  gamesPlayed: number;
-  wins: number;
-  losses: number;
-  winRate: number;
-}
+class LeaderboardService {
+  private leaderboard: LeaderboardEntry[] = [];
+  private categories: LeaderboardCategory[] = [];
+  private timeframes: LeaderboardTimeframe[] = [];
 
-export class LeaderboardService {
-  private leaderboard: Map<string, LeaderboardEntry> = new Map();
-  private gameHistory: Map<string, any[]> = new Map();
-
-  updatePlayerScore(playerId: string, scoreChange: number, reason: string): void {
-    const entry = this.leaderboard.get(playerId) || this.createNewEntry(playerId);
-    
-    entry.score = Math.max(0, entry.score + scoreChange);
-    entry.level = this.calculateLevel(entry.score);
-    entry.lastActive = new Date();
-    
-    // Add achievement if applicable
-    const achievement = this.checkAchievements(entry);
-    if (achievement) {
-      entry.achievements.push(achievement);
-    }
-    
-    this.leaderboard.set(playerId, entry);
-    console.log(`Player ${playerId} score updated: +${scoreChange} (${reason})`);
+  constructor() {
+    this.initializeMockData();
   }
 
-  recordGameResult(playerId: string, won: boolean, gameData: any): void {
-    const entry = this.leaderboard.get(playerId) || this.createNewEntry(playerId);
-    
-    entry.gamesPlayed++;
-    if (won) {
-      entry.wins++;
-      this.updatePlayerScore(playerId, 100, 'Game Win');
-    } else {
-      entry.losses++;
-      this.updatePlayerScore(playerId, -10, 'Game Loss');
-    }
-    
-    entry.winRate = entry.gamesPlayed > 0 ? (entry.wins / entry.gamesPlayed) * 100 : 0;
-    entry.lastActive = new Date();
-    
-    // Record game history
-    if (!this.gameHistory.has(playerId)) {
-      this.gameHistory.set(playerId, []);
-    }
-    
-    const history = this.gameHistory.get(playerId)!;
-    history.push({
-      ...gameData,
-      won,
-      timestamp: new Date()
-    });
-    
-    // Keep only last 50 games
-    if (history.length > 50) {
-      history.splice(0, history.length - 50);
-    }
-    
-    this.leaderboard.set(playerId, entry);
-  }
-
-  getLeaderboard(limit: number = 10, sortBy: 'score' | 'level' | 'winRate' = 'score'): LeaderboardEntry[] {
-    const entries = Array.from(this.leaderboard.values());
-    
-    entries.sort((a, b) => {
-      switch (sortBy) {
-        case 'score':
-          return b.score - a.score;
-        case 'level':
-          return b.level - a.level;
-        case 'winRate':
-          return b.winRate - a.winRate;
-        default:
-          return b.score - a.score;
+  private initializeMockData() {
+    // Mock leaderboard data
+    this.leaderboard = [
+      {
+        id: '1',
+        rank: 1,
+        username: 'CryptoKing',
+        avatar: '👑',
+        score: 125000,
+        level: 45,
+        guild: 'Crypto Warriors',
+        achievements: 28,
+        gamesPlayed: 156,
+        winRate: 87.5,
+        lastActive: new Date(),
+        isOnline: true,
+        badges: ['legendary', 'trader', 'explorer'],
+        category: 'overall',
+        timeframe: 'all',
+        experience: 45000,
+        coins: 25000,
+        nfts: 45,
+        friends: 89,
+        guildRank: 1,
+        weeklyScore: 5000,
+        monthlyScore: 20000,
+        totalPlayTime: 1200, // in hours
+        favoriteGameMode: 'trading',
+        joinDate: new Date('2024-01-15'),
+        lastLogin: new Date(),
+        streak: 15,
+        maxStreak: 30,
+        totalTrades: 234,
+        successfulTrades: 198,
+        reputation: 95,
+        socialScore: 78,
+        explorationScore: 92,
+        combatScore: 85,
+        tradingScore: 98
+      },
+      {
+        id: '2',
+        rank: 2,
+        username: 'FlowMaster',
+        avatar: '⚡',
+        score: 118000,
+        level: 42,
+        guild: 'Flow Explorers',
+        achievements: 25,
+        gamesPlayed: 142,
+        winRate: 82.3,
+        lastActive: new Date(Date.now() - 30 * 60 * 1000),
+        isOnline: true,
+        badges: ['epic', 'trader', 'social'],
+        category: 'overall',
+        timeframe: 'all',
+        experience: 42000,
+        coins: 22000,
+        nfts: 38,
+        friends: 76,
+        guildRank: 2,
+        weeklyScore: 4800,
+        monthlyScore: 18500,
+        totalPlayTime: 1100,
+        favoriteGameMode: 'exploration',
+        joinDate: new Date('2024-01-20'),
+        lastLogin: new Date(Date.now() - 30 * 60 * 1000),
+        streak: 12,
+        maxStreak: 25,
+        totalTrades: 189,
+        successfulTrades: 156,
+        reputation: 88,
+        socialScore: 85,
+        explorationScore: 95,
+        combatScore: 78,
+        tradingScore: 82
       }
+    ];
+
+    // Mock categories
+    this.categories = [
+      { id: 'overall', name: 'Overall', description: 'Total score across all activities' },
+      { id: 'weekly', name: 'Weekly', description: 'Score for the current week' },
+      { id: 'monthly', name: 'Monthly', description: 'Score for the current month' },
+      { id: 'guilds', name: 'Guilds', description: 'Guild-based rankings' },
+      { id: 'trading', name: 'Trading', description: 'Trading performance rankings' },
+      { id: 'exploration', name: 'Exploration', description: 'Exploration achievements' },
+      { id: 'social', name: 'Social', description: 'Social interaction rankings' },
+      { id: 'combat', name: 'Combat', description: 'Combat performance rankings' }
+    ];
+
+    // Mock timeframes
+    this.timeframes = [
+      { id: 'all', name: 'All Time', description: 'All-time rankings' },
+      { id: 'week', name: 'This Week', description: 'Current week rankings' },
+      { id: 'month', name: 'This Month', description: 'Current month rankings' },
+      { id: 'year', name: 'This Year', description: 'Current year rankings' }
+    ];
+  }
+
+  // Get leaderboard entries
+  getLeaderboard(category: string = 'overall', timeframe: string = 'all', limit: number = 100): LeaderboardEntry[] {
+    let filteredEntries = this.leaderboard.filter(entry => 
+      entry.category === category && entry.timeframe === timeframe
+    );
+
+    // Sort by score (descending)
+    filteredEntries.sort((a, b) => b.score - a.score);
+
+    // Update ranks
+    filteredEntries.forEach((entry, index) => {
+      entry.rank = index + 1;
     });
-    
-    return entries.slice(0, limit);
+
+    return filteredEntries.slice(0, limit);
   }
 
-  getPlayerRank(playerId: string): { rank: number; totalPlayers: number } | null {
-    const entries = this.getLeaderboard(1000, 'score');
-    const rank = entries.findIndex(entry => entry.playerId === playerId);
-    
-    if (rank === -1) return null;
-    
-    return {
-      rank: rank + 1,
-      totalPlayers: entries.length
-    };
+  // Get player rank
+  getPlayerRank(playerId: string, category: string = 'overall', timeframe: string = 'all'): number {
+    const leaderboard = this.getLeaderboard(category, timeframe);
+    const player = leaderboard.find(entry => entry.id === playerId);
+    return player ? player.rank : -1;
   }
 
+  // Get player statistics
   getPlayerStats(playerId: string): LeaderboardEntry | null {
-    return this.leaderboard.get(playerId) || null;
+    return this.leaderboard.find(entry => entry.id === playerId) || null;
   }
 
-  getPlayerHistory(playerId: string, limit: number = 10): any[] {
-    const history = this.gameHistory.get(playerId) || [];
-    return history.slice(-limit).reverse();
-  }
+  // Update player score
+  updatePlayerScore(playerId: string, scoreDelta: number, category: string = 'overall'): boolean {
+    const player = this.leaderboard.find(entry => entry.id === playerId);
+    if (!player) return false;
 
-  getTopAchievements(): { achievement: string; count: number }[] {
-    const achievementCounts = new Map<string, number>();
-    
-    for (const entry of this.leaderboard.values()) {
-      for (const achievement of entry.achievements) {
-        achievementCounts.set(achievement, (achievementCounts.get(achievement) || 0) + 1);
-      }
+    player.score += scoreDelta;
+    player.lastActive = new Date();
+    player.isOnline = true;
+
+    // Update category-specific scores
+    switch (category) {
+      case 'weekly':
+        player.weeklyScore += scoreDelta;
+        break;
+      case 'monthly':
+        player.monthlyScore += scoreDelta;
+        break;
+      case 'trading':
+        player.tradingScore += scoreDelta;
+        break;
+      case 'exploration':
+        player.explorationScore += scoreDelta;
+        break;
+      case 'social':
+        player.socialScore += scoreDelta;
+        break;
+      case 'combat':
+        player.combatScore += scoreDelta;
+        break;
     }
-    
-    return Array.from(achievementCounts.entries())
-      .map(([achievement, count]) => ({ achievement, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+
+    return true;
   }
 
-  getWeeklyTopPlayers(): LeaderboardEntry[] {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    
-    const recentEntries = Array.from(this.leaderboard.values())
-      .filter(entry => entry.lastActive >= weekAgo)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 10);
-    
-    return recentEntries;
-  }
-
-  private createNewEntry(playerId: string): LeaderboardEntry {
-    return {
-      playerId,
-      username: 'Anonymous',
-      score: 0,
-      level: 1,
-      achievements: [],
+  // Add player to leaderboard
+  addPlayer(player: Omit<LeaderboardEntry, 'id' | 'rank' | 'lastActive' | 'isOnline'>): string {
+    const newPlayer: LeaderboardEntry = {
+      ...player,
+      id: `player_${Date.now()}`,
+      rank: 0,
       lastActive: new Date(),
-      gamesPlayed: 0,
-      wins: 0,
-      losses: 0,
-      winRate: 0
+      isOnline: true
+    };
+
+    this.leaderboard.push(newPlayer);
+    return newPlayer.id;
+  }
+
+  // Update player status
+  updatePlayerStatus(playerId: string, isOnline: boolean): boolean {
+    const player = this.leaderboard.find(entry => entry.id === playerId);
+    if (!player) return false;
+
+    player.isOnline = isOnline;
+    player.lastActive = new Date();
+    return true;
+  }
+
+  // Get categories
+  getCategories(): LeaderboardCategory[] {
+    return this.categories;
+  }
+
+  // Get timeframes
+  getTimeframes(): LeaderboardTimeframe[] {
+    return this.timeframes;
+  }
+
+  // Get leaderboard statistics
+  getLeaderboardStats(): {
+    totalPlayers: number;
+    onlinePlayers: number;
+    averageScore: number;
+    topGuild: string;
+    mostActiveCategory: string;
+    averageLevel: number;
+    totalGamesPlayed: number;
+    averageWinRate: number;
+  } {
+    const totalPlayers = this.leaderboard.length;
+    const onlinePlayers = this.leaderboard.filter(entry => entry.isOnline).length;
+    const averageScore = this.leaderboard.reduce((sum, entry) => sum + entry.score, 0) / totalPlayers;
+    
+    // Find top guild
+    const guildScores = this.leaderboard.reduce((acc, entry) => {
+      if (entry.guild) {
+        acc[entry.guild] = (acc[entry.guild] || 0) + entry.score;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const topGuild = Object.entries(guildScores)
+      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'None';
+    
+    // Find most active category
+    const categoryCounts = this.leaderboard.reduce((acc, entry) => {
+      acc[entry.category] = (acc[entry.category] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const mostActiveCategory = Object.entries(categoryCounts)
+      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'overall';
+    
+    const averageLevel = this.leaderboard.reduce((sum, entry) => sum + entry.level, 0) / totalPlayers;
+    const totalGamesPlayed = this.leaderboard.reduce((sum, entry) => sum + entry.gamesPlayed, 0);
+    const averageWinRate = this.leaderboard.reduce((sum, entry) => sum + entry.winRate, 0) / totalPlayers;
+
+    return {
+      totalPlayers,
+      onlinePlayers,
+      averageScore,
+      topGuild,
+      mostActiveCategory,
+      averageLevel,
+      totalGamesPlayed,
+      averageWinRate
     };
   }
 
-  private calculateLevel(score: number): number {
-    // Level calculation: every 1000 points = 1 level
-    return Math.floor(score / 1000) + 1;
+  // Get guild leaderboard
+  getGuildLeaderboard(limit: number = 50): Array<{
+    guildName: string;
+    totalScore: number;
+    memberCount: number;
+    averageScore: number;
+    topPlayer: string;
+    rank: number;
+  }> {
+    const guildScores = this.leaderboard.reduce((acc, entry) => {
+      if (entry.guild) {
+        if (!acc[entry.guild]) {
+          acc[entry.guild] = {
+            totalScore: 0,
+            memberCount: 0,
+            members: []
+          };
+        }
+        acc[entry.guild].totalScore += entry.score;
+        acc[entry.guild].memberCount += 1;
+        acc[entry.guild].members.push(entry);
+      }
+      return acc;
+    }, {} as Record<string, { totalScore: number; memberCount: number; members: LeaderboardEntry[] }>);
+
+    const guildLeaderboard = Object.entries(guildScores)
+      .map(([guildName, data]) => ({
+        guildName,
+        totalScore: data.totalScore,
+        memberCount: data.memberCount,
+        averageScore: data.totalScore / data.memberCount,
+        topPlayer: data.members.sort((a, b) => b.score - a.score)[0]?.username || 'Unknown',
+        rank: 0
+      }))
+      .sort((a, b) => b.totalScore - a.totalScore);
+
+    // Update ranks
+    guildLeaderboard.forEach((guild, index) => {
+      guild.rank = index + 1;
+    });
+
+    return guildLeaderboard.slice(0, limit);
   }
 
-  private checkAchievements(entry: LeaderboardEntry): string | null {
-    const achievements = [];
-    
-    // First win
-    if (entry.wins === 1 && !entry.achievements.includes('first_win')) {
-      achievements.push('first_win');
-    }
-    
-    // Win streak
-    if (entry.wins >= 5 && !entry.achievements.includes('win_streak_5')) {
-      achievements.push('win_streak_5');
-    }
-    
-    // High score
-    if (entry.score >= 10000 && !entry.achievements.includes('high_score')) {
-      achievements.push('high_score');
-    }
-    
-    // Level milestones
-    if (entry.level >= 10 && !entry.achievements.includes('level_10')) {
-      achievements.push('level_10');
-    }
-    
-    if (entry.level >= 25 && !entry.achievements.includes('level_25')) {
-      achievements.push('level_25');
-    }
-    
-    // Win rate achievements
-    if (entry.winRate >= 80 && entry.gamesPlayed >= 10 && !entry.achievements.includes('high_win_rate')) {
-      achievements.push('high_win_rate');
-    }
-    
-    return achievements.length > 0 ? achievements[0] : null;
-  }
-
-  cleanupOldData(): void {
-    const monthAgo = new Date();
-    monthAgo.setMonth(monthAgo.getMonth() - 1);
-    
-    // Clean up old game history
-    for (const [playerId, history] of this.gameHistory.entries()) {
-      const recentHistory = history.filter(game => game.timestamp >= monthAgo);
-      this.gameHistory.set(playerId, recentHistory);
-    }
-    
-    console.log('Cleaned up old leaderboard data');
+  // Search players
+  searchPlayers(query: string, limit: number = 20): LeaderboardEntry[] {
+    const searchQuery = query.toLowerCase();
+    return this.leaderboard
+      .filter(entry => 
+        entry.username.toLowerCase().includes(searchQuery) ||
+        entry.guild?.toLowerCase().includes(searchQuery) ||
+        entry.badges.some(badge => badge.toLowerCase().includes(searchQuery))
+      )
+      .slice(0, limit);
   }
 }
 
+export const leaderboardService = new LeaderboardService();
