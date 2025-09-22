@@ -471,18 +471,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Tailwind CSS** for modern UI design
 - **Next.js** for the React framework
 - **TypeScript** for type safety
-
-## 📞 Support
-
-- **Email**: support@freeflow.xyz
-- **Discord**: [Join our community](https://discord.gg/freeflow)
-- **Twitter**: [@FreeFlowGame](https://twitter.com/freeflowgame)
-- **Documentation**: [docs.freeflow.xyz](https://docs.freeflow.xyz)
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ---
 
 **Built with ❤️ for the Flow ecosystem**
