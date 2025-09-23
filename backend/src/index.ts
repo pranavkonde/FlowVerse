@@ -5,6 +5,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { GameService } from './services/GameService';
 import { GameController } from './controllers/GameController';
+import { ChatService } from './services/ChatService';
+import { MiniGameService } from './services/MiniGameService';
+import { NPCService } from './services/NPCService';
 import { 
   securityHeaders, 
   createRateLimit, 
@@ -41,6 +44,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Initialize services
 const gameService = new GameService();
 const gameController = new GameController(gameService);
+const chatService = new ChatService(io);
+const miniGameService = new MiniGameService();
+const npcService = new NPCService();
 
 // Routes
 app.get('/', (req, res) => {
@@ -67,6 +73,109 @@ app.get('/rooms', (req, res) => {
     createdAt: room.createdAt
   }));
   res.json({ rooms });
+});
+
+// Mini-games API routes
+app.get('/api/minigames', (req, res) => {
+  const games = miniGameService.getGames();
+  res.json({ games });
+});
+
+app.get('/api/minigames/:gameId', (req, res) => {
+  const game = miniGameService.getGame(req.params.gameId);
+  if (!game) {
+    return res.status(404).json({ error: 'Game not found' });
+  }
+  res.json({ game });
+});
+
+app.get('/api/minigames/:gameId/leaderboard', (req, res) => {
+  const leaderboard = miniGameService.getLeaderboard(req.params.gameId);
+  if (!leaderboard) {
+    return res.status(404).json({ error: 'Leaderboard not found' });
+  }
+  res.json({ leaderboard });
+});
+
+app.get('/api/minigames/:gameId/scores', (req, res) => {
+  const limit = parseInt(req.query.limit as string) || 10;
+  const scores = miniGameService.getScores(req.params.gameId, limit);
+  res.json({ scores });
+});
+
+app.post('/api/minigames/:gameId/scores', (req, res) => {
+  try {
+    const score = miniGameService.submitScore(req.body);
+    res.json({ score });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/minigames/stats/global', (req, res) => {
+  const stats = miniGameService.getGlobalStats();
+  res.json({ stats });
+});
+
+app.get('/api/minigames/stats/user/:userId', (req, res) => {
+  const stats = miniGameService.getUserStats(req.params.userId);
+  res.json({ stats });
+});
+
+// NPC API routes
+app.get('/api/npcs', (req, res) => {
+  const npcs = npcService.getNPCs();
+  res.json({ npcs });
+});
+
+app.get('/api/npcs/:npcId', (req, res) => {
+  const npc = npcService.getNPC(req.params.npcId);
+  if (!npc) {
+    return res.status(404).json({ error: 'NPC not found' });
+  }
+  res.json({ npc });
+});
+
+app.get('/api/npcs/area/:area', (req, res) => {
+  const npcs = npcService.getNPCsInArea(req.params.area);
+  res.json({ npcs });
+});
+
+app.get('/api/npcs/near/:x/:y/:radius', (req, res) => {
+  const x = parseFloat(req.params.x);
+  const y = parseFloat(req.params.y);
+  const radius = parseFloat(req.params.radius);
+  const npcs = npcService.getNPCsNearPosition(x, y, radius);
+  res.json({ npcs });
+});
+
+app.post('/api/npcs/:npcId/conversation', (req, res) => {
+  try {
+    const conversation = npcService.startConversation(req.params.npcId, req.body.playerId);
+    res.json({ conversation });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/npcs/conversation/:conversationId/message', (req, res) => {
+  try {
+    npcService.sendMessage(req.params.conversationId, req.body.message, req.body.speaker);
+    const conversation = npcService.getConversation(req.params.conversationId);
+    res.json({ conversation });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete('/api/npcs/conversation/:conversationId', (req, res) => {
+  npcService.endConversation(req.params.conversationId);
+  res.json({ success: true });
+});
+
+app.get('/api/npcs/stats', (req, res) => {
+  const stats = npcService.getStats();
+  res.json({ stats });
 });
 
 // Socket.io connection handling
