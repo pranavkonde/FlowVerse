@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Trophy, Star, Zap, Crown, Award, X } from 'lucide-react';
+import { Trophy, Star, Zap, Crown, Award, X, Share2 } from 'lucide-react';
 import { Achievement, ACHIEVEMENT_CATEGORIES } from '@/types/achievements';
 import { achievementService } from '@/services/AchievementService';
+import { socialService } from '@/services/SocialService';
+import SocialShare from './SocialShare';
 
 interface AchievementSystemProps {
   isVisible: boolean;
@@ -14,6 +16,8 @@ export default function AchievementSystem({ isVisible, onToggle }: AchievementSy
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [newUnlock, setNewUnlock] = useState<Achievement | null>(null);
+  const [showSocialShare, setShowSocialShare] = useState(false);
+  const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
 
   useEffect(() => {
     setAchievements(achievementService.getAchievements());
@@ -22,6 +26,12 @@ export default function AchievementSystem({ isVisible, onToggle }: AchievementSy
     achievementService.setOnUnlockCallback((achievement) => {
       setNewUnlock(achievement);
       setAchievements(achievementService.getAchievements());
+      
+      // Auto-share if enabled
+      if (socialService.shouldAutoShare('achievement')) {
+        const shareData = socialService.createAchievementShareData(achievement);
+        socialService.shareToAllEnabled(shareData);
+      }
       
       // Auto-hide notification after 5 seconds
       setTimeout(() => setNewUnlock(null), 5000);
@@ -55,6 +65,11 @@ export default function AchievementSystem({ isVisible, onToggle }: AchievementSy
   const totalPoints = achievementService.getTotalPoints();
   const completionPercentage = achievementService.getCompletionPercentage();
   const rarityStats = achievementService.getRarityStats();
+
+  const handleShareAchievement = (achievement: Achievement) => {
+    setSelectedAchievement(achievement);
+    setShowSocialShare(true);
+  };
 
   if (!isVisible) return null;
 
@@ -204,8 +219,17 @@ export default function AchievementSystem({ isVisible, onToggle }: AchievementSy
                             {achievement.points} pts
                           </div>
                           {isUnlocked && (
-                            <div className="text-xs text-green-400">
-                              ✓ Unlocked
+                            <div className="flex items-center gap-2">
+                              <div className="text-xs text-green-400">
+                                ✓ Unlocked
+                              </div>
+                              <button
+                                onClick={() => handleShareAchievement(achievement)}
+                                className="text-blue-400 hover:text-blue-300 transition-colors"
+                                title="Share Achievement"
+                              >
+                                <Share2 className="w-4 h-4" />
+                              </button>
                             </div>
                           )}
                         </div>
@@ -240,6 +264,15 @@ export default function AchievementSystem({ isVisible, onToggle }: AchievementSy
           </div>
         </div>
       </div>
+
+      {/* Social Share Modal */}
+      {showSocialShare && selectedAchievement && (
+        <SocialShare
+          isVisible={showSocialShare}
+          onToggle={() => setShowSocialShare(false)}
+          shareData={socialService.createAchievementShareData(selectedAchievement)}
+        />
+      )}
     </>
   );
 }
