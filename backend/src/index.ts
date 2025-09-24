@@ -10,6 +10,7 @@ import { MiniGameService } from './services/MiniGameService';
 import { NPCService } from './services/NPCService';
 import { AntiCheatService } from './services/AntiCheatService';
 import { AnalyticsService } from './services/AnalyticsService';
+import { EventService } from './services/EventService';
 import { 
   securityHeaders, 
   createRateLimit, 
@@ -51,6 +52,7 @@ const miniGameService = new MiniGameService();
 const npcService = new NPCService();
 const antiCheatService = new AntiCheatService();
 const analyticsService = new AnalyticsService();
+const eventService = new EventService(io);
 
 // Routes
 app.get('/', (req, res) => {
@@ -262,6 +264,137 @@ app.post('/api/analytics/metrics', (req, res) => {
 
 app.get('/api/analytics/stats', (req, res) => {
   const stats = analyticsService.getStats();
+  res.json({ stats });
+});
+
+// Event API routes
+app.get('/api/events/active', (req, res) => {
+  const events = eventService.getActiveEvents();
+  res.json(events);
+});
+
+app.get('/api/events/upcoming', (req, res) => {
+  const events = eventService.getUpcomingEvents();
+  res.json(events);
+});
+
+app.get('/api/events/:eventId', (req, res) => {
+  const event = eventService.getEventById(req.params.eventId);
+  if (!event) {
+    return res.status(404).json({ error: 'Event not found' });
+  }
+  res.json(event);
+});
+
+app.post('/api/events/:eventId/join', (req, res) => {
+  try {
+    const { userId } = req.body;
+    const success = eventService.joinEvent(req.params.eventId, userId);
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: 'Failed to join event' });
+    }
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/events/:eventId/leave', (req, res) => {
+  try {
+    const { userId } = req.body;
+    const success = eventService.leaveEvent(req.params.eventId, userId);
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: 'Failed to leave event' });
+    }
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/events/participation/:userId', (req, res) => {
+  const participation = eventService.getUserParticipation(req.params.userId);
+  res.json(participation);
+});
+
+app.get('/api/events/:eventId/leaderboard', (req, res) => {
+  const leaderboard = eventService.getEventLeaderboard(req.params.eventId);
+  if (!leaderboard) {
+    return res.status(404).json({ error: 'Leaderboard not found' });
+  }
+  res.json(leaderboard);
+});
+
+app.get('/api/events/:eventId/objectives', (req, res) => {
+  const objectives = eventService.getEventObjectives(req.params.eventId);
+  res.json(objectives);
+});
+
+app.post('/api/events/:eventId/objectives/:objectiveId/progress', (req, res) => {
+  try {
+    const { userId, progress } = req.body;
+    const success = eventService.updateObjectiveProgress(
+      req.params.eventId,
+      req.params.objectiveId,
+      userId,
+      progress
+    );
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: 'Failed to update progress' });
+    }
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/events/:eventId/rewards/:rewardId/claim', (req, res) => {
+  try {
+    const { userId } = req.body;
+    const success = eventService.claimReward(req.params.eventId, req.params.rewardId, userId);
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: 'Failed to claim reward' });
+    }
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/events/notifications/:userId', (req, res) => {
+  const notifications = eventService.getEventNotifications(req.params.userId);
+  res.json(notifications);
+});
+
+app.post('/api/events/notifications/:notificationId/read', (req, res) => {
+  try {
+    const success = eventService.markNotificationAsRead(req.params.notificationId);
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: 'Failed to mark notification as read' });
+    }
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/events/seasonal/:season', (req, res) => {
+  const events = eventService.getSeasonalEvents(req.params.season);
+  res.json(events);
+});
+
+app.get('/api/events/limited-time', (req, res) => {
+  const events = eventService.getLimitedTimeEvents();
+  res.json(events);
+});
+
+app.get('/api/events/stats', (req, res) => {
+  const stats = eventService.getEventStats();
   res.json({ stats });
 });
 
