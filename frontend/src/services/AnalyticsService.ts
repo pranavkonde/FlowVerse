@@ -1,520 +1,347 @@
 import { 
-  PlayerAnalytics, 
-  GameSession, 
-  PerformanceMetrics, 
-  UserBehavior, 
-  AnalyticsReport, 
-  RealTimeMetrics,
-  CohortAnalysis,
-  FunnelAnalysis,
-  A/BTestResult,
+  AnalyticsEvent, 
+  PerformanceMetric, 
+  UserBehavior,
   AnalyticsDashboard,
-  DashboardWidget
+  AnalyticsConfig,
+  ANALYTICS_EVENTS,
+  AnalyticsEventType,
+  DEFAULT_ANALYTICS_CONFIG
 } from '@/types/analytics';
 
-class AnalyticsService {
-  private playerAnalytics: PlayerAnalytics[] = [];
-  private gameSessions: GameSession[] = [];
-  private performanceMetrics: PerformanceMetrics[] = [];
-  private userBehaviors: UserBehavior[] = [];
-  private reports: AnalyticsReport[] = [];
-  private realTimeMetrics: RealTimeMetrics | null = null;
-  private dashboards: AnalyticsDashboard[] = [];
+export class AnalyticsService {
+  private config: AnalyticsConfig;
+  private events: AnalyticsEvent[] = [];
+  private metrics: PerformanceMetric[] = [];
+  private userBehaviors: Map<string, UserBehavior> = new Map();
+  private sessionId: string;
 
   constructor() {
-    this.loadData();
-    this.initializeSampleData();
+    this.config = { ...DEFAULT_ANALYTICS_CONFIG };
+    this.sessionId = this.generateSessionId();
   }
 
-  // Player Analytics
-  getPlayerAnalytics(userId: string): PlayerAnalytics | null {
-    return this.playerAnalytics.find(p => p.userId === userId) || null;
-  }
-
-  getAllPlayerAnalytics(): PlayerAnalytics[] {
-    return this.playerAnalytics;
-  }
-
-  updatePlayerAnalytics(userId: string, updates: Partial<PlayerAnalytics>): void {
-    const index = this.playerAnalytics.findIndex(p => p.userId === userId);
-    if (index >= 0) {
-      this.playerAnalytics[index] = { ...this.playerAnalytics[index], ...updates };
-    } else {
-      const newAnalytics: PlayerAnalytics = {
-        userId,
-        username: `User_${userId.slice(-4)}`,
-        totalPlayTime: 0,
-        sessionsPlayed: 0,
-        averageSessionDuration: 0,
-        totalDistance: 0,
-        totalScore: 0,
-        highScore: 0,
-        gamesPlayed: 0,
-        gamesWon: 0,
-        winRate: 0,
-        favoriteGameMode: 'classic',
-        achievementsUnlocked: 0,
-        totalAchievements: 0,
-        socialInteractions: 0,
-        friendsCount: 0,
-        guildMemberships: 0,
-        tradingVolume: 0,
-        tokensEarned: 0,
-        tokensSpent: 0,
-        nftsOwned: 0,
-        questsCompleted: 0,
-        voiceCommandsUsed: 0,
-        lastActive: new Date(),
-        joinDate: new Date(),
-        level: 1,
-        experience: 0,
-        rank: 0,
-        ...updates
-      };
-      this.playerAnalytics.push(newAnalytics);
+  public async initialize(): Promise<void> {
+    try {
+      await this.loadConfig();
+      this.startPerformanceMonitoring();
+      console.log('Analytics Service initialized');
+    } catch (error) {
+      console.error('Failed to initialize Analytics Service:', error);
     }
-    this.saveData();
   }
 
-  // Game Sessions
-  startGameSession(userId: string, gameMode: string, location: string): string {
-    const session: GameSession = {
-      id: Date.now().toString(),
-      userId,
-      startTime: new Date(),
-      endTime: new Date(),
-      duration: 0,
-      gameMode,
-      score: 0,
-      distance: 0,
-      interactions: 0,
-      achievements: [],
-      location,
-      device: this.getDeviceInfo(),
-      platform: this.getPlatformInfo()
+  private async loadConfig(): Promise<void> {
+    const stored = localStorage.getItem('freeflow_analytics_config');
+    if (stored) {
+      try {
+        this.config = { ...this.config, ...JSON.parse(stored) };
+      } catch (error) {
+        console.error('Failed to load analytics config:', error);
+      }
+    }
+  }
+
+  private startPerformanceMonitoring(): void {
+    if (!this.config.performanceMonitoring) return;
+
+    // Monitor FPS
+    let lastTime = performance.now();
+    let frameCount = 0;
+
+    const measureFPS = () => {
+      frameCount++;
+      const currentTime = performance.now();
+      
+      if (currentTime - lastTime >= 1000) {
+        const fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
+        this.recordPerformanceMetric('fps', fps, 'fps');
+        frameCount = 0;
+        lastTime = currentTime;
+      }
+      
+      requestAnimationFrame(measureFPS);
     };
 
-    this.gameSessions.push(session);
-    this.saveData();
-    return session.id;
+    measureFPS();
+
+    // Monitor memory usage
+    setInterval(() => {
+      if ('memory' in performance) {
+        const memory = (performance as any).memory;
+        this.recordPerformanceMetric('memory', memory.usedJSHeapSize / 1024 / 1024, 'MB');
+      }
+    }, 5000);
   }
 
-  endGameSession(sessionId: string, score: number, distance: number, interactions: number, achievements: string[]): void {
-    const session = this.gameSessions.find(s => s.id === sessionId);
-    if (session) {
-      session.endTime = new Date();
-      session.duration = session.endTime.getTime() - session.startTime.getTime();
-      session.score = score;
-      session.distance = distance;
-      session.interactions = interactions;
-      session.achievements = achievements;
+  public trackEvent(
+    type: AnalyticsEventType,
+    action: string,
+    data: any,
+    userId?: string
+  ): void {
+    if (!this.config.enabled) return;
 
-      // Update player analytics
-      this.updatePlayerAnalytics(session.userId, {
-        totalPlayTime: this.getTotalPlayTime(session.userId),
-        sessionsPlayed: this.getSessionsPlayed(session.userId),
-        averageSessionDuration: this.getAverageSessionDuration(session.userId),
-        totalDistance: this.getTotalDistance(session.userId),
-        totalScore: this.getTotalScore(session.userId),
-        highScore: Math.max(this.getHighScore(session.userId), score),
-        gamesPlayed: this.getGamesPlayed(session.userId),
-        lastActive: new Date()
+    const event: AnalyticsEvent = {
+      id: this.generateEventId(),
+      type: type.split('_')[0] as any,
+      category: type.split('_').slice(1).join('_'),
+      action,
+      userId,
+      sessionId: this.sessionId,
+      timestamp: new Date(),
+      data,
+      metadata: {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        version: '1.0.0'
+      }
+    };
+
+    this.events.push(event);
+    this.updateUserBehavior(userId, action, data);
+    this.cleanupOldEvents();
+  }
+
+  public recordPerformanceMetric(
+    type: 'fps' | 'latency' | 'memory' | 'cpu' | 'network',
+    value: number,
+    unit: string,
+    userId?: string
+  ): void {
+    if (!this.config.performanceMonitoring) return;
+
+    const metric: PerformanceMetric = {
+      id: this.generateMetricId(),
+      type,
+      value,
+      unit,
+      timestamp: new Date(),
+      sessionId: this.sessionId,
+      userId,
+      metadata: {
+        device: navigator.platform,
+        browser: this.getBrowserInfo(),
+        connection: 'unknown'
+      }
+    };
+
+    this.metrics.push(metric);
+    this.cleanupOldMetrics();
+  }
+
+  private updateUserBehavior(userId: string | undefined, action: string, data: any): void {
+    if (!userId || !this.config.userBehaviorTracking) return;
+
+    const behavior = this.getUserBehavior(userId);
+    
+    if (action.includes('movement')) behavior.actions.movement++;
+    else if (action.includes('chat')) behavior.actions.chat++;
+    else if (action.includes('trade')) behavior.actions.trade++;
+    else if (action.includes('quest')) behavior.actions.quest++;
+    else if (action.includes('minigame')) behavior.actions.miniGame++;
+    else if (action.includes('npc')) behavior.actions.npcInteraction++;
+
+    this.userBehaviors.set(userId, behavior);
+  }
+
+  private getUserBehavior(userId: string): UserBehavior {
+    if (!this.userBehaviors.has(userId)) {
+      const behavior: UserBehavior = {
+        userId,
+        sessionId: this.sessionId,
+        startTime: new Date(),
+        totalPlayTime: 0,
+        actions: {
+          movement: 0,
+          chat: 0,
+          trade: 0,
+          quest: 0,
+          miniGame: 0,
+          npcInteraction: 0
+        },
+        locations: [],
+        preferences: {
+          favoriteAreas: [],
+          commonActions: [],
+          playStyle: 'casual'
+        }
+      };
+      this.userBehaviors.set(userId, behavior);
+    }
+    return this.userBehaviors.get(userId)!;
+  }
+
+  private cleanupOldEvents(): void {
+    const retentionTime = this.config.dataRetention * 24 * 60 * 60 * 1000;
+    const cutoffTime = Date.now() - retentionTime;
+    this.events = this.events.filter(event => event.timestamp.getTime() > cutoffTime);
+  }
+
+  private cleanupOldMetrics(): void {
+    const retentionTime = this.config.dataRetention * 24 * 60 * 60 * 1000;
+    const cutoffTime = Date.now() - retentionTime;
+    this.metrics = this.metrics.filter(metric => metric.timestamp.getTime() > cutoffTime);
+  }
+
+  private getBrowserInfo(): string {
+    const ua = navigator.userAgent;
+    if (ua.includes('Chrome')) return 'Chrome';
+    if (ua.includes('Firefox')) return 'Firefox';
+    if (ua.includes('Safari')) return 'Safari';
+    if (ua.includes('Edge')) return 'Edge';
+    return 'Unknown';
+  }
+
+  private generateSessionId(): string {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  private generateEventId(): string {
+    return `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  private generateMetricId(): string {
+    return `metric_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  public getConfig(): AnalyticsConfig {
+    return { ...this.config };
+  }
+
+  public getEvents(): AnalyticsEvent[] {
+    return [...this.events];
+  }
+
+  public getMetrics(): PerformanceMetric[] {
+    return [...this.metrics];
+  }
+
+  public getUserBehavior(userId: string): UserBehavior | undefined {
+    return this.userBehaviors.get(userId);
+  }
+
+  public getDashboard(timeRange: '1h' | '24h' | '7d' | '30d' = '24h'): AnalyticsDashboard {
+    const now = Date.now();
+    const timeRanges = {
+      '1h': 60 * 60 * 1000,
+      '24h': 24 * 60 * 60 * 1000,
+      '7d': 7 * 24 * 60 * 60 * 1000,
+      '30d': 30 * 24 * 60 * 60 * 1000
+    };
+
+    const range = timeRanges[timeRange];
+    const startTime = now - range;
+
+    const recentEvents = this.events.filter(e => e.timestamp.getTime() > startTime);
+    const recentMetrics = this.metrics.filter(m => m.timestamp.getTime() > startTime);
+
+    const uniqueUsers = new Set(recentEvents.map(e => e.userId).filter(Boolean)).size;
+
+    return {
+      timeRange,
+      metrics: {
+        totalUsers: uniqueUsers,
+        activeUsers: uniqueUsers,
+        newUsers: uniqueUsers,
+        retentionRate: 85,
+        averageSessionTime: 1800,
+        totalSessions: 1
+      },
+      charts: {
+        userActivity: this.generateUserActivityChart(recentEvents),
+        performance: this.generatePerformanceChart(recentMetrics),
+        popularAreas: this.generatePopularAreasChart(recentEvents),
+        actionDistribution: this.generateActionDistributionChart(recentEvents)
+      },
+      insights: this.generateInsights(recentEvents, recentMetrics)
+    };
+  }
+
+  private generateUserActivityChart(events: AnalyticsEvent[]): Array<{ time: string; users: number }> {
+    const hours = 24;
+    const chart = [];
+    for (let i = 0; i < hours; i++) {
+      const hourStart = Date.now() - (hours - i) * 60 * 60 * 1000;
+      const hourEnd = hourStart + 60 * 60 * 1000;
+      
+      const hourEvents = events.filter(e => 
+        e.timestamp.getTime() >= hourStart && e.timestamp.getTime() < hourEnd
+      );
+      
+      const uniqueUsers = new Set(hourEvents.map(e => e.userId).filter(Boolean)).size;
+      
+      chart.push({
+        time: new Date(hourStart).toLocaleTimeString([], { hour: '2-digit' }),
+        users: uniqueUsers
       });
     }
-    this.saveData();
+    return chart;
   }
 
-  getGameSessions(userId?: string): GameSession[] {
-    if (userId) {
-      return this.gameSessions.filter(s => s.userId === userId);
-    }
-    return this.gameSessions;
-  }
-
-  // Performance Metrics
-  recordPerformanceMetrics(metrics: Partial<PerformanceMetrics>): void {
-    const performanceMetric: PerformanceMetrics = {
-      averageFPS: 60,
-      averageLatency: 50,
-      memoryUsage: 512,
-      cpuUsage: 30,
-      networkLatency: 20,
-      renderTime: 16,
-      loadTime: 2000,
-      crashCount: 0,
-      errorCount: 0,
-      ...metrics,
-      ...{ timestamp: new Date() }
-    } as PerformanceMetrics;
-
-    this.performanceMetrics.push(performanceMetric);
-    this.saveData();
-  }
-
-  getPerformanceMetrics(): PerformanceMetrics[] {
-    return this.performanceMetrics;
-  }
-
-  getAveragePerformanceMetrics(): PerformanceMetrics {
-    if (this.performanceMetrics.length === 0) {
-      return {
-        averageFPS: 60,
-        averageLatency: 50,
-        memoryUsage: 512,
-        cpuUsage: 30,
-        networkLatency: 20,
-        renderTime: 16,
-        loadTime: 2000,
-        crashCount: 0,
-        errorCount: 0
-      };
-    }
-
-    const sum = this.performanceMetrics.reduce((acc, metric) => ({
-      averageFPS: acc.averageFPS + metric.averageFPS,
-      averageLatency: acc.averageLatency + metric.averageLatency,
-      memoryUsage: acc.memoryUsage + metric.memoryUsage,
-      cpuUsage: acc.cpuUsage + metric.cpuUsage,
-      networkLatency: acc.networkLatency + metric.networkLatency,
-      renderTime: acc.renderTime + metric.renderTime,
-      loadTime: acc.loadTime + metric.loadTime,
-      crashCount: acc.crashCount + metric.crashCount,
-      errorCount: acc.errorCount + metric.errorCount
-    }), {
-      averageFPS: 0,
-      averageLatency: 0,
-      memoryUsage: 0,
-      cpuUsage: 0,
-      networkLatency: 0,
-      renderTime: 0,
-      loadTime: 0,
-      crashCount: 0,
-      errorCount: 0
-    });
-
-    const count = this.performanceMetrics.length;
-    return {
-      averageFPS: sum.averageFPS / count,
-      averageLatency: sum.averageLatency / count,
-      memoryUsage: sum.memoryUsage / count,
-      cpuUsage: sum.cpuUsage / count,
-      networkLatency: sum.networkLatency / count,
-      renderTime: sum.renderTime / count,
-      loadTime: sum.loadTime / count,
-      crashCount: sum.crashCount / count,
-      errorCount: sum.errorCount / count
-    };
-  }
-
-  // Real-time Metrics
-  getRealTimeMetrics(): RealTimeMetrics {
-    if (!this.realTimeMetrics) {
-      this.realTimeMetrics = {
-        onlineUsers: this.getOnlineUsersCount(),
-        activeGames: this.getActiveGamesCount(),
-        currentRevenue: this.getCurrentRevenue(),
-        systemHealth: this.getSystemHealth(),
-        averageResponseTime: this.getAverageResponseTime(),
-        errorRate: this.getErrorRate(),
-        memoryUsage: this.getCurrentMemoryUsage(),
-        cpuUsage: this.getCurrentCpuUsage(),
-        lastUpdated: new Date()
-      };
-    }
-    return this.realTimeMetrics;
-  }
-
-  updateRealTimeMetrics(): void {
-    this.realTimeMetrics = {
-      onlineUsers: this.getOnlineUsersCount(),
-      activeGames: this.getActiveGamesCount(),
-      currentRevenue: this.getCurrentRevenue(),
-      systemHealth: this.getSystemHealth(),
-      averageResponseTime: this.getAverageResponseTime(),
-      errorRate: this.getErrorRate(),
-      memoryUsage: this.getCurrentMemoryUsage(),
-      cpuUsage: this.getCurrentCpuUsage(),
-      lastUpdated: new Date()
-    };
-  }
-
-  // Analytics Reports
-  generateReport(type: 'daily' | 'weekly' | 'monthly' | 'custom', period?: { start: Date; end: Date }): AnalyticsReport {
-    const now = new Date();
-    let start: Date;
-    let end: Date = now;
-
-    switch (type) {
-      case 'daily':
-        start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        break;
-      case 'weekly':
-        start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case 'monthly':
-        start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        break;
-      case 'custom':
-        start = period?.start || new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        end = period?.end || now;
-        break;
-    }
-
-    const report: AnalyticsReport = {
-      id: Date.now().toString(),
-      title: `${type.charAt(0).toUpperCase() + type.slice(1)} Analytics Report`,
-      type,
-      period: { start, end },
-      metrics: this.calculateMetricsForPeriod(start, end),
-      charts: this.generateChartsForPeriod(start, end),
-      insights: this.generateInsights(start, end),
-      recommendations: this.generateRecommendations(start, end),
-      generatedAt: new Date(),
-      generatedBy: 'system'
-    };
-
-    this.reports.push(report);
-    this.saveData();
-    return report;
-  }
-
-  getReports(): AnalyticsReport[] {
-    return this.reports;
-  }
-
-  // Dashboard Management
-  createDashboard(name: string, description: string): AnalyticsDashboard {
-    const dashboard: AnalyticsDashboard = {
-      id: Date.now().toString(),
-      name,
-      description,
-      widgets: [],
-      layout: {
-        columns: 12,
-        rows: 8,
-        gap: 16,
-        padding: 16
-      },
-      isPublic: false,
-      createdBy: 'system',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    this.dashboards.push(dashboard);
-    this.saveData();
-    return dashboard;
-  }
-
-  getDashboards(): AnalyticsDashboard[] {
-    return this.dashboards;
-  }
-
-  addWidgetToDashboard(dashboardId: string, widget: DashboardWidget): void {
-    const dashboard = this.dashboards.find(d => d.id === dashboardId);
-    if (dashboard) {
-      dashboard.widgets.push(widget);
-      dashboard.updatedAt = new Date();
-      this.saveData();
-    }
-  }
-
-  // Helper Methods
-  private getTotalPlayTime(userId: string): number {
-    return this.gameSessions
-      .filter(s => s.userId === userId)
-      .reduce((total, session) => total + session.duration, 0);
-  }
-
-  private getSessionsPlayed(userId: string): number {
-    return this.gameSessions.filter(s => s.userId === userId).length;
-  }
-
-  private getAverageSessionDuration(userId: string): number {
-    const sessions = this.gameSessions.filter(s => s.userId === userId);
-    if (sessions.length === 0) return 0;
-    return sessions.reduce((total, session) => total + session.duration, 0) / sessions.length;
-  }
-
-  private getTotalDistance(userId: string): number {
-    return this.gameSessions
-      .filter(s => s.userId === userId)
-      .reduce((total, session) => total + session.distance, 0);
-  }
-
-  private getTotalScore(userId: string): number {
-    return this.gameSessions
-      .filter(s => s.userId === userId)
-      .reduce((total, session) => total + session.score, 0);
-  }
-
-  private getHighScore(userId: string): number {
-    const scores = this.gameSessions
-      .filter(s => s.userId === userId)
-      .map(s => s.score);
-    return scores.length > 0 ? Math.max(...scores) : 0;
-  }
-
-  private getGamesPlayed(userId: string): number {
-    return this.gameSessions.filter(s => s.userId === userId).length;
-  }
-
-  private getDeviceInfo(): string {
-    return navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop';
-  }
-
-  private getPlatformInfo(): string {
-    return navigator.platform || 'Unknown';
-  }
-
-  private getOnlineUsersCount(): number {
-    return Math.floor(Math.random() * 1000) + 500;
-  }
-
-  private getActiveGamesCount(): number {
-    return Math.floor(Math.random() * 100) + 50;
-  }
-
-  private getCurrentRevenue(): number {
-    return Math.floor(Math.random() * 10000) + 5000;
-  }
-
-  private getSystemHealth(): 'healthy' | 'warning' | 'critical' {
-    const health = Math.random();
-    if (health > 0.8) return 'healthy';
-    if (health > 0.5) return 'warning';
-    return 'critical';
-  }
-
-  private getAverageResponseTime(): number {
-    return Math.floor(Math.random() * 100) + 50;
-  }
-
-  private getErrorRate(): number {
-    return Math.random() * 5;
-  }
-
-  private getCurrentMemoryUsage(): number {
-    return Math.floor(Math.random() * 1000) + 500;
-  }
-
-  private getCurrentCpuUsage(): number {
-    return Math.floor(Math.random() * 100);
-  }
-
-  private calculateMetricsForPeriod(start: Date, end: Date): any {
-    const sessionsInPeriod = this.gameSessions.filter(s => 
-      s.startTime >= start && s.startTime <= end
-    );
-
-    return {
-      totalUsers: this.playerAnalytics.length,
-      activeUsers: new Set(sessionsInPeriod.map(s => s.userId)).size,
-      newUsers: 0, // Would need to track user creation dates
-      returningUsers: 0,
-      averageSessionDuration: sessionsInPeriod.reduce((total, s) => total + s.duration, 0) / sessionsInPeriod.length || 0,
-      totalPlayTime: sessionsInPeriod.reduce((total, s) => total + s.duration, 0),
-      totalRevenue: 0, // Would need revenue data
-      averageRevenuePerUser: 0,
-      retentionRate: 0.75, // Mock data
-      churnRate: 0.05
-    };
-  }
-
-  private generateChartsForPeriod(start: Date, end: Date): any[] {
-    // Mock chart data
-    return [
-      {
-        id: '1',
-        type: 'line',
-        title: 'Daily Active Users',
-        description: 'Number of active users per day',
-        data: [],
-        xAxis: 'Date',
-        yAxis: 'Users',
-        color: '#3B82F6'
-      }
-    ];
-  }
-
-  private generateInsights(start: Date, end: Date): string[] {
-    return [
-      'User engagement increased by 15% compared to the previous period',
-      'Average session duration is above the target of 20 minutes',
-      'Mobile users show higher retention rates than desktop users',
-      'Peak activity occurs between 7-9 PM local time'
-    ];
-  }
-
-  private generateRecommendations(start: Date, end: Date): string[] {
-    return [
-      'Consider implementing push notifications to increase user engagement',
-      'Optimize mobile performance to improve user experience',
-      'Add more social features to increase user retention',
-      'Implement personalized content recommendations'
-    ];
-  }
-
-  // Data Persistence
-  private saveData(): void {
-    localStorage.setItem('flowverse_analytics', JSON.stringify({
-      playerAnalytics: this.playerAnalytics,
-      gameSessions: this.gameSessions,
-      performanceMetrics: this.performanceMetrics,
-      userBehaviors: this.userBehaviors,
-      reports: this.reports,
-      dashboards: this.dashboards
+  private generatePerformanceChart(metrics: PerformanceMetric[]): Array<{ time: string; fps: number; latency: number }> {
+    const fpsMetrics = metrics.filter(m => m.type === 'fps');
+    return fpsMetrics.map(fps => ({
+      time: fps.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      fps: fps.value,
+      latency: 0
     }));
   }
 
-  private loadData(): void {
-    const saved = localStorage.getItem('flowverse_analytics');
-    if (saved) {
-      const data = JSON.parse(saved);
-      this.playerAnalytics = data.playerAnalytics?.map((p: any) => ({
-        ...p,
-        lastActive: new Date(p.lastActive),
-        joinDate: new Date(p.joinDate)
-      })) || [];
-      this.gameSessions = data.gameSessions?.map((s: any) => ({
-        ...s,
-        startTime: new Date(s.startTime),
-        endTime: new Date(s.endTime)
-      })) || [];
-      this.performanceMetrics = data.performanceMetrics || [];
-      this.userBehaviors = data.userBehaviors || [];
-      this.reports = data.reports?.map((r: any) => ({
-        ...r,
-        period: {
-          start: new Date(r.period.start),
-          end: new Date(r.period.end)
-        },
-        generatedAt: new Date(r.generatedAt)
-      })) || [];
-      this.dashboards = data.dashboards?.map((d: any) => ({
-        ...d,
-        createdAt: new Date(d.createdAt),
-        updatedAt: new Date(d.updatedAt)
-      })) || [];
-    }
+  private generatePopularAreasChart(events: AnalyticsEvent[]): Array<{ area: string; visits: number }> {
+    const areaCounts: Record<string, number> = {};
+    
+    events.forEach(event => {
+      if (event.data.location?.area) {
+        areaCounts[event.data.location.area] = (areaCounts[event.data.location.area] || 0) + 1;
+      }
+    });
+    
+    return Object.entries(areaCounts)
+      .map(([area, visits]) => ({ area, visits }))
+      .sort((a, b) => b.visits - a.visits)
+      .slice(0, 10);
   }
 
-  private initializeSampleData(): void {
-    if (this.playerAnalytics.length === 0) {
-      // Create sample player analytics
-      for (let i = 0; i < 10; i++) {
-        this.updatePlayerAnalytics(`user_${i}`, {
-          username: `Player_${i}`,
-          totalPlayTime: Math.floor(Math.random() * 100000),
-          sessionsPlayed: Math.floor(Math.random() * 100),
-          totalScore: Math.floor(Math.random() * 100000),
-          highScore: Math.floor(Math.random() * 10000),
-          gamesPlayed: Math.floor(Math.random() * 50),
-          level: Math.floor(Math.random() * 50) + 1,
-          experience: Math.floor(Math.random() * 10000)
-        });
-      }
+  private generateActionDistributionChart(events: AnalyticsEvent[]): Array<{ action: string; count: number }> {
+    const actionCounts: Record<string, number> = {};
+    
+    events.forEach(event => {
+      actionCounts[event.action] = (actionCounts[event.action] || 0) + 1;
+    });
+    
+    return Object.entries(actionCounts)
+      .map(([action, count]) => ({ action, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }
+
+  private generateInsights(events: AnalyticsEvent[], metrics: PerformanceMetric[]): Array<{
+    type: 'trend' | 'anomaly' | 'recommendation';
+    title: string;
+    description: string;
+    impact: 'low' | 'medium' | 'high';
+    timestamp: Date;
+  }> {
+    const insights = [];
+
+    const avgFPS = metrics.filter(m => m.type === 'fps').reduce((sum, m) => sum + m.value, 0) / metrics.length;
+    if (avgFPS < 30) {
+      insights.push({
+        type: 'anomaly' as const,
+        title: 'Low FPS Detected',
+        description: `Average FPS is ${avgFPS.toFixed(1)}, which may impact user experience`,
+        impact: 'high' as const,
+        timestamp: new Date()
+      });
     }
+
+    return insights;
+  }
+
+  public updateConfig(newConfig: Partial<AnalyticsConfig>): void {
+    this.config = { ...this.config, ...newConfig };
+    localStorage.setItem('freeflow_analytics_config', JSON.stringify(this.config));
   }
 }
 

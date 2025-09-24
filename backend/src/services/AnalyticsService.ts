@@ -1,268 +1,390 @@
-import { Player } from '../types/game';
-
-export interface AnalyticsData {
-  timestamp: Date;
-  event: string;
-  playerId?: string;
-  roomCode?: string;
-  data: any;
-}
-
-export interface GameMetrics {
-  totalPlayers: number;
-  activeRooms: number;
-  averagePlayersPerRoom: number;
-  peakConcurrentPlayers: number;
-  totalGamesPlayed: number;
-  averageGameDuration: number;
-  mostPopularRooms: Array<{ roomCode: string; playerCount: number }>;
-  playerRetention: {
-    day1: number;
-    day7: number;
-    day30: number;
-  };
-}
+import { AnalyticsEvent, PerformanceMetric, UserBehavior, SystemHealth, AnalyticsDashboard } from '../types/analytics';
 
 export class AnalyticsService {
-  private events: AnalyticsData[] = [];
-  private playerSessions: Map<string, { startTime: Date; lastActivity: Date }> = new Map();
-  private roomMetrics: Map<string, { startTime: Date; playerCount: number }> = new Map();
-  private peakPlayers: number = 0;
+  private events: AnalyticsEvent[] = [];
+  private metrics: PerformanceMetric[] = [];
+  private userBehaviors: Map<string, UserBehavior> = new Map();
+  private systemHealth: SystemHealth[] = [];
 
-  trackEvent(event: string, playerId?: string, roomCode?: string, data: any = {}): void {
-    const analyticsData: AnalyticsData = {
+  constructor() {
+    this.startSystemMonitoring();
+  }
+
+  private startSystemMonitoring(): void {
+    // Monitor system health every 30 seconds
+    setInterval(() => {
+      this.recordSystemHealth();
+    }, 30000);
+  }
+
+  public recordEvent(event: AnalyticsEvent): void {
+    this.events.push(event);
+    this.updateUserBehavior(event);
+    this.cleanupOldData();
+  }
+
+  public recordMetric(metric: PerformanceMetric): void {
+    this.metrics.push(metric);
+    this.cleanupOldData();
+  }
+
+  private updateUserBehavior(event: AnalyticsEvent): void {
+    if (!event.userId) return;
+
+    const behavior = this.getUserBehavior(event.userId);
+    
+    // Update action counts based on event type
+    if (event.action.includes('movement')) behavior.actions.movement++;
+    else if (event.action.includes('chat')) behavior.actions.chat++;
+    else if (event.action.includes('trade')) behavior.actions.trade++;
+    else if (event.action.includes('quest')) behavior.actions.quest++;
+    else if (event.action.includes('minigame')) behavior.actions.miniGame++;
+    else if (event.action.includes('npc')) behavior.actions.npcInteraction++;
+
+    // Update location data
+    if (event.data.location) {
+      const location = behavior.locations.find(l => l.area === event.data.location.area);
+      if (location) {
+        location.visitCount++;
+        location.timeSpent += 1;
+      } else {
+        behavior.locations.push({
+          area: event.data.location.area,
+          timeSpent: 1,
+          visitCount: 1
+        });
+      }
+    }
+
+    this.userBehaviors.set(event.userId, behavior);
+  }
+
+  private getUserBehavior(userId: string): UserBehavior {
+    if (!this.userBehaviors.has(userId)) {
+      const behavior: UserBehavior = {
+        userId,
+        sessionId: `session_${Date.now()}`,
+        startTime: new Date(),
+        totalPlayTime: 0,
+        actions: {
+          movement: 0,
+          chat: 0,
+          trade: 0,
+          quest: 0,
+          miniGame: 0,
+          npcInteraction: 0
+        },
+        locations: [],
+        preferences: {
+          favoriteAreas: [],
+          commonActions: [],
+          playStyle: 'casual'
+        }
+      };
+      this.userBehaviors.set(userId, behavior);
+    }
+    return this.userBehaviors.get(userId)!;
+  }
+
+  private recordSystemHealth(): void {
+    const health: SystemHealth = {
       timestamp: new Date(),
-      event,
-      playerId,
-      roomCode,
-      data
+      status: this.calculateSystemStatus(),
+      metrics: {
+        serverLoad: this.getServerLoad(),
+        memoryUsage: this.getMemoryUsage(),
+        cpuUsage: this.getCpuUsage(),
+        activeConnections: this.getActiveConnections(),
+        responseTime: this.getAverageResponseTime(),
+        errorRate: this.getErrorRate()
+      },
+      alerts: this.getSystemAlerts()
     };
 
-    this.events.push(analyticsData);
+    this.systemHealth.push(health);
     
-    // Keep only last 10000 events to prevent memory issues
-    if (this.events.length > 10000) {
-      this.events = this.events.slice(-10000);
+    // Keep only last 100 health records
+    if (this.systemHealth.length > 100) {
+      this.systemHealth = this.systemHealth.slice(-100);
     }
-
-    console.log(`Analytics: ${event}`, { playerId, roomCode, data });
   }
 
-  trackPlayerJoin(playerId: string, roomCode: string): void {
-    this.playerSessions.set(playerId, {
-      startTime: new Date(),
-      lastActivity: new Date()
-    });
+  private calculateSystemStatus(): 'healthy' | 'warning' | 'critical' {
+    const recentHealth = this.systemHealth[this.systemHealth.length - 1];
+    if (!recentHealth) return 'healthy';
 
-    this.trackEvent('player_join', playerId, roomCode, {
-      timestamp: new Date()
-    });
+    const { metrics } = recentHealth;
+    
+    if (metrics.memoryUsage > 90 || metrics.cpuUsage > 90 || metrics.errorRate > 10) {
+      return 'critical';
+    }
+    
+    if (metrics.memoryUsage > 70 || metrics.cpuUsage > 70 || metrics.errorRate > 5) {
+      return 'warning';
+    }
+    
+    return 'healthy';
   }
 
-  trackPlayerLeave(playerId: string, roomCode: string): void {
-    const session = this.playerSessions.get(playerId);
-    if (session) {
-      const sessionDuration = new Date().getTime() - session.startTime.getTime();
-      this.trackEvent('player_leave', playerId, roomCode, {
-        sessionDuration,
+  private getServerLoad(): number {
+    // Simplified server load calculation
+    return Math.random() * 100;
+  }
+
+  private getMemoryUsage(): number {
+    // Simplified memory usage calculation
+    return Math.random() * 100;
+  }
+
+  private getCpuUsage(): number {
+    // Simplified CPU usage calculation
+    return Math.random() * 100;
+  }
+
+  private getActiveConnections(): number {
+    // This would be connected to the actual game service
+    return Math.floor(Math.random() * 100) + 10;
+  }
+
+  private getAverageResponseTime(): number {
+    // Simplified response time calculation
+    return Math.random() * 200 + 50;
+  }
+
+  private getErrorRate(): number {
+    // Simplified error rate calculation
+    return Math.random() * 5;
+  }
+
+  private getSystemAlerts(): Array<{
+    type: string;
+    message: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    timestamp: Date;
+  }> {
+    const alerts = [];
+    
+    // Check for performance issues
+    const recentMetrics = this.metrics.slice(-10);
+    const avgFPS = recentMetrics
+      .filter(m => m.type === 'fps')
+      .reduce((sum, m) => sum + m.value, 0) / recentMetrics.length;
+    
+    if (avgFPS < 30) {
+      alerts.push({
+        type: 'performance',
+        message: 'Low FPS detected across multiple users',
+        severity: 'high' as const,
         timestamp: new Date()
       });
-      this.playerSessions.delete(playerId);
-    }
-  }
-
-  trackPlayerActivity(playerId: string, activity: string, data: any = {}): void {
-    const session = this.playerSessions.get(playerId);
-    if (session) {
-      session.lastActivity = new Date();
     }
 
-    this.trackEvent('player_activity', playerId, undefined, {
-      activity,
-      ...data,
-      timestamp: new Date()
-    });
+    return alerts;
   }
 
-  trackRoomCreated(roomCode: string, maxPlayers: number): void {
-    this.roomMetrics.set(roomCode, {
-      startTime: new Date(),
-      playerCount: 0
-    });
-
-    this.trackEvent('room_created', undefined, roomCode, {
-      maxPlayers,
-      timestamp: new Date()
-    });
+  private cleanupOldData(): void {
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    
+    this.events = this.events.filter(event => event.timestamp.getTime() > oneDayAgo);
+    this.metrics = this.metrics.filter(metric => metric.timestamp.getTime() > oneDayAgo);
   }
 
-  trackRoomDestroyed(roomCode: string, playerCount: number): void {
-    const roomData = this.roomMetrics.get(roomCode);
-    if (roomData) {
-      const roomDuration = new Date().getTime() - roomData.startTime.getTime();
-      this.trackEvent('room_destroyed', undefined, roomCode, {
-        duration: roomDuration,
-        finalPlayerCount: playerCount,
-        timestamp: new Date()
-      });
-      this.roomMetrics.delete(roomCode);
-    }
+  public getEvents(timeRange?: number): AnalyticsEvent[] {
+    if (!timeRange) return [...this.events];
+    
+    const cutoffTime = Date.now() - timeRange;
+    return this.events.filter(event => event.timestamp.getTime() > cutoffTime);
   }
 
-  updateRoomPlayerCount(roomCode: string, playerCount: number): void {
-    const roomData = this.roomMetrics.get(roomCode);
-    if (roomData) {
-      roomData.playerCount = playerCount;
-      this.peakPlayers = Math.max(this.peakPlayers, playerCount);
-    }
+  public getMetrics(timeRange?: number): PerformanceMetric[] {
+    if (!timeRange) return [...this.metrics];
+    
+    const cutoffTime = Date.now() - timeRange;
+    return this.metrics.filter(metric => metric.timestamp.getTime() > cutoffTime);
   }
 
-  getGameMetrics(): GameMetrics {
-    const now = new Date();
-    const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    
-    const recentEvents = this.events.filter(event => event.timestamp >= last24Hours);
-    const activePlayers = Array.from(this.playerSessions.values())
-      .filter(session => now.getTime() - session.lastActivity.getTime() < 5 * 60 * 1000).length;
-    
-    const activeRooms = this.roomMetrics.size;
-    const totalPlayers = this.playerSessions.size;
-    const averagePlayersPerRoom = activeRooms > 0 ? totalPlayers / activeRooms : 0;
-    
-    const joinEvents = recentEvents.filter(event => event.event === 'player_join');
-    const leaveEvents = recentEvents.filter(event => event.event === 'player_leave');
-    const totalGamesPlayed = Math.floor((joinEvents.length + leaveEvents.length) / 2);
-    
-    const gameDurations = leaveEvents
-      .map(event => event.data.sessionDuration)
-      .filter(duration => duration && duration > 0);
-    const averageGameDuration = gameDurations.length > 0 
-      ? gameDurations.reduce((sum, duration) => sum + duration, 0) / gameDurations.length 
-      : 0;
+  public getUserBehavior(userId: string): UserBehavior | undefined {
+    return this.userBehaviors.get(userId);
+  }
 
-    const roomPlayerCounts = Array.from(this.roomMetrics.values())
-      .map(room => ({ roomCode: 'unknown', playerCount: room.playerCount }))
-      .sort((a, b) => b.playerCount - a.playerCount)
-      .slice(0, 5);
+  public getSystemHealth(): SystemHealth[] {
+    return [...this.systemHealth];
+  }
+
+  public getDashboard(timeRange: '1h' | '24h' | '7d' | '30d' = '24h'): AnalyticsDashboard {
+    const timeRanges = {
+      '1h': 60 * 60 * 1000,
+      '24h': 24 * 60 * 60 * 1000,
+      '7d': 7 * 24 * 60 * 60 * 1000,
+      '30d': 30 * 24 * 60 * 60 * 1000
+    };
+
+    const range = timeRanges[timeRange];
+    const startTime = Date.now() - range;
+
+    const recentEvents = this.events.filter(e => e.timestamp.getTime() > startTime);
+    const recentMetrics = this.metrics.filter(m => m.timestamp.getTime() > startTime);
+
+    const uniqueUsers = new Set(recentEvents.map(e => e.userId).filter(Boolean)).size;
+    const uniqueSessions = new Set(recentEvents.map(e => e.sessionId)).size;
 
     return {
-      totalPlayers: activePlayers,
-      activeRooms,
-      averagePlayersPerRoom: Math.round(averagePlayersPerRoom * 100) / 100,
-      peakConcurrentPlayers: this.peakPlayers,
-      totalGamesPlayed,
-      averageGameDuration: Math.round(averageGameDuration / 1000), // Convert to seconds
-      mostPopularRooms: roomPlayerCounts,
-      playerRetention: {
-        day1: this.calculateRetention(1),
-        day7: this.calculateRetention(7),
-        day30: this.calculateRetention(30)
-      }
+      timeRange,
+      metrics: {
+        totalUsers: uniqueUsers,
+        activeUsers: uniqueUsers,
+        newUsers: uniqueUsers, // Simplified
+        retentionRate: 85, // Simplified
+        averageSessionTime: 1800, // 30 minutes
+        totalSessions: uniqueSessions
+      },
+      charts: {
+        userActivity: this.generateUserActivityChart(recentEvents),
+        performance: this.generatePerformanceChart(recentMetrics),
+        popularAreas: this.generatePopularAreasChart(recentEvents),
+        actionDistribution: this.generateActionDistributionChart(recentEvents)
+      },
+      insights: this.generateInsights(recentEvents, recentMetrics)
     };
   }
 
-  getPlayerAnalytics(playerId: string): {
-    totalSessions: number;
-    totalPlayTime: number;
-    averageSessionDuration: number;
-    favoriteRooms: string[];
-    activityBreakdown: { [key: string]: number };
-  } {
-    const playerEvents = this.events.filter(event => event.playerId === playerId);
-    const joinEvents = playerEvents.filter(event => event.event === 'player_join');
-    const leaveEvents = playerEvents.filter(event => event.event === 'player_leave');
+  private generateUserActivityChart(events: AnalyticsEvent[]): Array<{ time: string; users: number }> {
+    const hours = 24;
+    const chart = [];
     
-    const totalSessions = joinEvents.length;
-    const totalPlayTime = leaveEvents.reduce((sum, event) => 
-      sum + (event.data.sessionDuration || 0), 0);
-    const averageSessionDuration = totalSessions > 0 ? totalPlayTime / totalSessions : 0;
+    for (let i = 0; i < hours; i++) {
+      const hourStart = Date.now() - (hours - i) * 60 * 60 * 1000;
+      const hourEnd = hourStart + 60 * 60 * 1000;
+      
+      const hourEvents = events.filter(e => 
+        e.timestamp.getTime() >= hourStart && e.timestamp.getTime() < hourEnd
+      );
+      
+      const uniqueUsers = new Set(hourEvents.map(e => e.userId).filter(Boolean)).size;
+      
+      chart.push({
+        time: new Date(hourStart).toLocaleTimeString([], { hour: '2-digit' }),
+        users: uniqueUsers
+      });
+    }
     
-    const roomCounts = new Map<string, number>();
-    joinEvents.forEach(event => {
-      if (event.roomCode) {
-        roomCounts.set(event.roomCode, (roomCounts.get(event.roomCode) || 0) + 1);
-      }
-    });
-    
-    const favoriteRooms = Array.from(roomCounts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([roomCode]) => roomCode);
-    
-    const activityBreakdown: { [key: string]: number } = {};
-    playerEvents.forEach(event => {
-      if (event.event === 'player_activity' && event.data.activity) {
-        activityBreakdown[event.data.activity] = (activityBreakdown[event.data.activity] || 0) + 1;
-      }
-    });
-
-    return {
-      totalSessions,
-      totalPlayTime: Math.round(totalPlayTime / 1000), // Convert to seconds
-      averageSessionDuration: Math.round(averageSessionDuration / 1000),
-      favoriteRooms,
-      activityBreakdown
-    };
+    return chart;
   }
 
-  getEventFrequency(eventType: string, hours: number = 24): Array<{ hour: number; count: number }> {
-    const now = new Date();
-    const startTime = new Date(now.getTime() - hours * 60 * 60 * 1000);
+  private generatePerformanceChart(metrics: PerformanceMetric[]): Array<{ time: string; fps: number; latency: number }> {
+    const fpsMetrics = metrics.filter(m => m.type === 'fps');
+    const latencyMetrics = metrics.filter(m => m.type === 'latency');
     
-    const eventCounts = new Map<number, number>();
-    
-    this.events
-      .filter(event => event.event === eventType && event.timestamp >= startTime)
-      .forEach(event => {
-        const hour = event.timestamp.getHours();
-        eventCounts.set(hour, (eventCounts.get(hour) || 0) + 1);
-      });
-    
-    return Array.from({ length: 24 }, (_, hour) => ({
-      hour,
-      count: eventCounts.get(hour) || 0
+    return fpsMetrics.map((fps, index) => ({
+      time: fps.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      fps: fps.value,
+      latency: latencyMetrics[index]?.value || 0
     }));
   }
 
-  private calculateRetention(days: number): number {
-    const now = new Date();
-    const targetDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  private generatePopularAreasChart(events: AnalyticsEvent[]): Array<{ area: string; visits: number }> {
+    const areaCounts: Record<string, number> = {};
     
-    const playersOnTargetDate = new Set(
-      this.events
-        .filter(event => 
-          event.event === 'player_join' && 
-          event.timestamp >= targetDate && 
-          event.timestamp < new Date(targetDate.getTime() + 24 * 60 * 60 * 1000)
-        )
-        .map(event => event.playerId)
-    );
-    
-    const playersStillActive = Array.from(playersOnTargetDate).filter(playerId => {
-      const session = this.playerSessions.get(playerId);
-      return session && now.getTime() - session.lastActivity.getTime() < 24 * 60 * 60 * 1000;
+    events.forEach(event => {
+      if (event.data.location?.area) {
+        areaCounts[event.data.location.area] = (areaCounts[event.data.location.area] || 0) + 1;
+      }
     });
     
-    return playersOnTargetDate.size > 0 
-      ? (playersStillActive.length / playersOnTargetDate.size) * 100 
-      : 0;
+    return Object.entries(areaCounts)
+      .map(([area, visits]) => ({ area, visits }))
+      .sort((a, b) => b.visits - a.visits)
+      .slice(0, 10);
   }
 
-  cleanupOldData(): void {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
+  private generateActionDistributionChart(events: AnalyticsEvent[]): Array<{ action: string; count: number }> {
+    const actionCounts: Record<string, number> = {};
     
-    this.events = this.events.filter(event => event.timestamp >= weekAgo);
+    events.forEach(event => {
+      actionCounts[event.action] = (actionCounts[event.action] || 0) + 1;
+    });
     
-    // Clean up inactive sessions
-    const now = new Date();
-    for (const [playerId, session] of this.playerSessions.entries()) {
-      if (now.getTime() - session.lastActivity.getTime() > 24 * 60 * 60 * 1000) {
-        this.playerSessions.delete(playerId);
+    return Object.entries(actionCounts)
+      .map(([action, count]) => ({ action, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }
+
+  private generateInsights(events: AnalyticsEvent[], metrics: PerformanceMetric[]): Array<{
+    type: 'trend' | 'anomaly' | 'recommendation';
+    title: string;
+    description: string;
+    impact: 'low' | 'medium' | 'high';
+    timestamp: Date;
+  }> {
+    const insights = [];
+
+    // Performance insights
+    const fpsMetrics = metrics.filter(m => m.type === 'fps');
+    if (fpsMetrics.length > 0) {
+      const avgFPS = fpsMetrics.reduce((sum, m) => sum + m.value, 0) / fpsMetrics.length;
+      if (avgFPS < 30) {
+        insights.push({
+          type: 'anomaly' as const,
+          title: 'Low FPS Detected',
+          description: `Average FPS is ${avgFPS.toFixed(1)}, which may impact user experience`,
+          impact: 'high' as const,
+          timestamp: new Date()
+        });
       }
     }
-    
-    console.log('Cleaned up old analytics data');
+
+    // User activity insights
+    const uniqueUsers = new Set(events.map(e => e.userId).filter(Boolean)).size;
+    if (uniqueUsers > 50) {
+      insights.push({
+        type: 'trend' as const,
+        title: 'High User Activity',
+        description: `${uniqueUsers} unique users active in the last period`,
+        impact: 'medium' as const,
+        timestamp: new Date()
+      });
+    }
+
+    // System health insights
+    const recentHealth = this.systemHealth[this.systemHealth.length - 1];
+    if (recentHealth && recentHealth.status === 'critical') {
+      insights.push({
+        type: 'anomaly' as const,
+        title: 'System Health Critical',
+        description: 'Server performance is degraded and may affect user experience',
+        impact: 'high' as const,
+        timestamp: new Date()
+      });
+    }
+
+    return insights;
+  }
+
+  public getStats(): {
+    totalEvents: number;
+    totalMetrics: number;
+    uniqueUsers: number;
+    systemStatus: string;
+    averageFPS: number;
+    errorRate: number;
+  } {
+    const uniqueUsers = new Set(this.events.map(e => e.userId).filter(Boolean)).size;
+    const fpsMetrics = this.metrics.filter(m => m.type === 'fps');
+    const avgFPS = fpsMetrics.length > 0 
+      ? fpsMetrics.reduce((sum, m) => sum + m.value, 0) / fpsMetrics.length 
+      : 0;
+
+    const recentHealth = this.systemHealth[this.systemHealth.length - 1];
+    const systemStatus = recentHealth ? recentHealth.status : 'unknown';
+
+    return {
+      totalEvents: this.events.length,
+      totalMetrics: this.metrics.length,
+      uniqueUsers,
+      systemStatus,
+      averageFPS: Math.round(avgFPS),
+      errorRate: recentHealth ? recentHealth.metrics.errorRate : 0
+    };
   }
 }
-

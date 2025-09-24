@@ -107,63 +107,10 @@ export interface AnalyticsDashboard {
 export interface AnalyticsConfig {
   enabled: boolean;
   trackingLevel: 'minimal' | 'standard' | 'detailed';
-  dataRetention: number; // days
+  dataRetention: number;
   realTimeUpdates: boolean;
   performanceMonitoring: boolean;
   userBehaviorTracking: boolean;
   errorTracking: boolean;
   customEvents: boolean;
 }
-
-export interface AnalyticsReport {
-  id: string;
-  title: string;
-  type: 'daily' | 'weekly' | 'monthly' | 'custom';
-  generatedAt: Date;
-  timeRange: {
-    start: Date;
-    end: Date;
-  };
-  summary: {
-    totalEvents: number;
-    uniqueUsers: number;
-    averageSessionTime: number;
-    topEvents: Array<{ event: string; count: number }>;
-  };
-  sections: Array<{
-    title: string;
-    data: any;
-    charts?: any[];
-  }>;
-}
-
-export const ANALYTICS_EVENTS = {
-  USER_LOGIN: 'user_login',
-  USER_LOGOUT: 'user_logout',
-  USER_MOVEMENT: 'user_movement',
-  USER_CHAT: 'user_chat',
-  USER_TRADE: 'user_trade',
-  USER_QUEST_START: 'user_quest_start',
-  USER_QUEST_COMPLETE: 'user_quest_complete',
-  USER_MINIGAME_START: 'user_minigame_start',
-  USER_MINIGAME_COMPLETE: 'user_minigame_complete',
-  USER_NPC_INTERACTION: 'user_npc_interaction',
-  PERFORMANCE_FPS_DROP: 'performance_fps_drop',
-  PERFORMANCE_LATENCY_SPIKE: 'performance_latency_spike',
-  ERROR_CLIENT: 'error_client',
-  ERROR_SERVER: 'error_server',
-  CUSTOM_EVENT: 'custom_event'
-} as const;
-
-export type AnalyticsEventType = typeof ANALYTICS_EVENTS[keyof typeof ANALYTICS_EVENTS];
-
-export const DEFAULT_ANALYTICS_CONFIG: AnalyticsConfig = {
-  enabled: true,
-  trackingLevel: 'standard',
-  dataRetention: 30,
-  realTimeUpdates: true,
-  performanceMonitoring: true,
-  userBehaviorTracking: true,
-  errorTracking: true,
-  customEvents: true
-};
