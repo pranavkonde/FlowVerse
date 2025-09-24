@@ -8,6 +8,8 @@ import { GameController } from './controllers/GameController';
 import { ChatService } from './services/ChatService';
 import { MiniGameService } from './services/MiniGameService';
 import { NPCService } from './services/NPCService';
+import { AntiCheatService } from './services/AntiCheatService';
+import { AnalyticsService } from './services/AnalyticsService';
 import { 
   securityHeaders, 
   createRateLimit, 
@@ -47,6 +49,8 @@ const gameController = new GameController(gameService);
 const chatService = new ChatService(io);
 const miniGameService = new MiniGameService();
 const npcService = new NPCService();
+const antiCheatService = new AntiCheatService();
+const analyticsService = new AnalyticsService();
 
 // Routes
 app.get('/', (req, res) => {
@@ -175,6 +179,89 @@ app.delete('/api/npcs/conversation/:conversationId', (req, res) => {
 
 app.get('/api/npcs/stats', (req, res) => {
   const stats = npcService.getStats();
+  res.json({ stats });
+});
+
+// Security API routes
+app.get('/api/security/config', (req, res) => {
+  const config = antiCheatService.getConfig();
+  res.json({ config });
+});
+
+app.get('/api/security/rules', (req, res) => {
+  const rules = antiCheatService.getRules();
+  res.json({ rules });
+});
+
+app.get('/api/security/events', (req, res) => {
+  const events = antiCheatService.getEvents();
+  res.json({ events });
+});
+
+app.get('/api/security/stats', (req, res) => {
+  const stats = antiCheatService.getStats();
+  res.json({ stats });
+});
+
+app.post('/api/security/validate/movement', (req, res) => {
+  try {
+    const { userId, fromX, fromY, toX, toY, timestamp } = req.body;
+    const validation = antiCheatService.validateMovement(userId, fromX, fromY, toX, toY, timestamp);
+    res.json({ validation });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/security/validate/action', (req, res) => {
+  try {
+    const { userId, actionType, timestamp } = req.body;
+    const validation = antiCheatService.validateAction(userId, actionType, timestamp);
+    res.json({ validation });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Analytics API routes
+app.get('/api/analytics/dashboard', (req, res) => {
+  const timeRange = req.query.timeRange as '1h' | '24h' | '7d' | '30d' || '24h';
+  const dashboard = analyticsService.getDashboard(timeRange);
+  res.json({ dashboard });
+});
+
+app.get('/api/analytics/events', (req, res) => {
+  const timeRange = parseInt(req.query.timeRange as string) || undefined;
+  const events = analyticsService.getEvents(timeRange);
+  res.json({ events });
+});
+
+app.get('/api/analytics/metrics', (req, res) => {
+  const timeRange = parseInt(req.query.timeRange as string) || undefined;
+  const metrics = analyticsService.getMetrics(timeRange);
+  res.json({ metrics });
+});
+
+app.post('/api/analytics/events', (req, res) => {
+  try {
+    analyticsService.recordEvent(req.body);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/analytics/metrics', (req, res) => {
+  try {
+    analyticsService.recordMetric(req.body);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/analytics/stats', (req, res) => {
+  const stats = analyticsService.getStats();
   res.json({ stats });
 });
 

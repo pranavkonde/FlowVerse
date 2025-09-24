@@ -1,234 +1,215 @@
 export interface SecurityEvent {
   id: string;
-  type: 'cheat_detected' | 'suspicious_activity' | 'security_violation' | 'login_attempt' | 'data_breach';
+  type: 'movement' | 'action' | 'chat' | 'trade' | 'login' | 'suspicious';
   severity: 'low' | 'medium' | 'high' | 'critical';
-  userId?: string;
-  deviceId?: string;
-  ipAddress?: string;
-  userAgent?: string;
-  timestamp: Date;
-  description: string;
-  details: any;
-  resolved: boolean;
-  actionTaken?: string;
-}
-
-export interface CheatDetection {
-  id: string;
   userId: string;
-  type: 'speed_hack' | 'aimbot' | 'wallhack' | 'infinite_health' | 'score_manipulation' | 'time_manipulation' | 'inventory_duplication';
-  confidence: number; // 0-100
-  evidence: CheatEvidence[];
-  detectedAt: Date;
-  gameSession: string;
-  status: 'investigating' | 'confirmed' | 'false_positive' | 'resolved';
-  penalty?: SecurityPenalty;
-}
-
-export interface CheatEvidence {
-  type: 'behavioral' | 'statistical' | 'technical' | 'network';
-  description: string;
-  data: any;
-  weight: number; // 0-1
   timestamp: Date;
+  data: any;
+  location?: {
+    x: number;
+    y: number;
+    area: string;
+  };
+  description: string;
+  resolved: boolean;
 }
 
-export interface SecurityPenalty {
-  type: 'warning' | 'temporary_ban' | 'permanent_ban' | 'score_reset' | 'inventory_wipe';
-  duration?: number; // in minutes
-  reason: string;
-  appliedAt: Date;
-  expiresAt?: Date;
-  appliedBy: string;
+export interface AntiCheatRule {
+  id: string;
+  name: string;
+  description: string;
+  type: 'movement' | 'action' | 'rate_limit' | 'pattern' | 'statistical';
+  enabled: boolean;
+  severity: 'warning' | 'kick' | 'ban' | 'investigate';
+  conditions: {
+    threshold?: number;
+    timeWindow?: number; // in seconds
+    pattern?: string;
+    minOccurrences?: number;
+  };
+  actions: {
+    log: boolean;
+    alert: boolean;
+    autoAction: boolean;
+    notifyAdmins: boolean;
+  };
 }
 
-export interface SecurityMetrics {
-  totalEvents: number;
-  eventsByType: { [type: string]: number };
-  eventsBySeverity: { [severity: string]: number };
-  cheatsDetected: number;
-  falsePositives: number;
-  averageDetectionTime: number;
-  systemUptime: number;
-  lastIncident: Date;
+export interface SecurityConfig {
+  enabled: boolean;
+  strictMode: boolean;
+  autoKick: boolean;
+  autoBan: boolean;
+  logLevel: 'minimal' | 'standard' | 'verbose';
+  rateLimits: {
+    movement: number; // actions per second
+    chat: number; // messages per minute
+    trade: number; // trades per hour
+    login: number; // login attempts per minute
+  };
+  suspiciousActivityThreshold: number;
+  banDuration: number; // in minutes
+  kickThreshold: number;
 }
 
-export interface UserSecurityProfile {
+export interface PlayerSecurityProfile {
   userId: string;
   riskScore: number; // 0-100
-  trustLevel: 'low' | 'medium' | 'high' | 'verified';
-  violations: SecurityViolation[];
-  lastSecurityCheck: Date;
-  deviceFingerprint: string;
-  behaviorPattern: BehaviorPattern;
-  whitelisted: boolean;
-  blacklisted: boolean;
-}
-
-export interface SecurityViolation {
-  id: string;
-  type: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  timestamp: Date;
-  description: string;
-  resolved: boolean;
-  penalty?: SecurityPenalty;
-}
-
-export interface BehaviorPattern {
-  averageSessionTime: number;
-  typicalPlayHours: number[];
-  commonLocations: string[];
-  interactionPatterns: { [key: string]: number };
-  deviceConsistency: number;
-  networkStability: number;
-  anomalyScore: number;
-}
-
-export interface AntiCheatConfig {
-  enabled: boolean;
-  sensitivity: 'low' | 'medium' | 'high';
-  realTimeDetection: boolean;
-  machineLearning: boolean;
-  behavioralAnalysis: boolean;
-  networkAnalysis: boolean;
-  autoPenalty: boolean;
-  thresholds: {
-    speedHack: number;
-    aimbot: number;
-    wallhack: number;
-    scoreManipulation: number;
-    timeManipulation: number;
+  violations: SecurityEvent[];
+  warnings: number;
+  kicks: number;
+  bans: number;
+  lastViolation?: Date;
+  isBanned: boolean;
+  banExpiry?: Date;
+  trustLevel: 'trusted' | 'normal' | 'suspicious' | 'banned';
+  behaviorPattern: {
+    averageMovementSpeed: number;
+    typicalPlayTime: number;
+    commonActions: string[];
+    unusualPatterns: string[];
   };
-  whitelist: string[];
-  blacklist: string[];
 }
 
 export interface SecurityAlert {
   id: string;
-  type: 'cheat' | 'suspicious' | 'violation' | 'system';
+  type: 'cheat_detected' | 'suspicious_activity' | 'rate_limit_exceeded' | 'pattern_anomaly';
   severity: 'low' | 'medium' | 'high' | 'critical';
-  title: string;
-  description: string;
-  userId?: string;
+  userId: string;
+  message: string;
   timestamp: Date;
+  data: any;
   acknowledged: boolean;
   resolved: boolean;
-  actions: SecurityAction[];
+  resolvedBy?: string;
+  resolvedAt?: Date;
 }
 
-export interface SecurityAction {
-  id: string;
-  type: 'investigate' | 'warn' | 'ban' | 'reset' | 'monitor';
-  description: string;
-  executed: boolean;
-  executedAt?: Date;
-  executedBy?: string;
-  result?: string;
-}
-
-export interface DeviceFingerprint {
-  id: string;
-  userId: string;
-  deviceId: string;
-  fingerprint: string;
-  components: {
-    screen: string;
-    timezone: string;
-    language: string;
-    platform: string;
-    userAgent: string;
-    canvas: string;
-    webgl: string;
-    audio: string;
-    fonts: string[];
-    plugins: string[];
+export interface MovementValidation {
+  isValid: boolean;
+  violations: string[];
+  speed: number;
+  distance: number;
+  timeDelta: number;
+  expectedPosition: {
+    x: number;
+    y: number;
   };
-  createdAt: Date;
-  lastSeen: Date;
-  trusted: boolean;
-}
-
-export interface NetworkAnalysis {
-  userId: string;
-  sessionId: string;
-  latency: number;
-  packetLoss: number;
-  jitter: number;
-  bandwidth: number;
-  anomalies: NetworkAnomaly[];
-  suspiciousPatterns: string[];
-  riskScore: number;
-  timestamp: Date;
-}
-
-export interface NetworkAnomaly {
-  type: 'high_latency' | 'packet_loss' | 'jitter_spike' | 'bandwidth_anomaly' | 'connection_drop';
-  severity: 'low' | 'medium' | 'high';
-  description: string;
-  timestamp: Date;
-  duration: number;
-  impact: string;
-}
-
-export interface SecurityDashboard {
-  metrics: SecurityMetrics;
-  recentEvents: SecurityEvent[];
-  activeAlerts: SecurityAlert[];
-  topThreats: CheatDetection[];
-  systemHealth: 'healthy' | 'warning' | 'critical';
-  lastUpdate: Date;
-}
-
-export interface SecurityReport {
-  id: string;
-  title: string;
-  type: 'daily' | 'weekly' | 'monthly' | 'incident';
-  period: {
-    start: Date;
-    end: Date;
+  actualPosition: {
+    x: number;
+    y: number;
   };
-  summary: {
-    totalEvents: number;
-    cheatsDetected: number;
-    falsePositives: number;
-    averageResponseTime: number;
-    systemUptime: number;
-  };
-  details: {
-    eventsByType: { [type: string]: number };
-    eventsBySeverity: { [severity: string]: number };
-    topViolators: { userId: string; violations: number }[];
-    systemPerformance: any;
-  };
-  recommendations: string[];
-  generatedAt: Date;
-  generatedBy: string;
 }
 
-export const CHEAT_TYPES = [
-  { id: 'speed_hack', name: 'Speed Hack', description: 'Moving faster than possible', icon: '🏃' },
-  { id: 'aimbot', name: 'Aimbot', description: 'Automated aiming assistance', icon: '🎯' },
-  { id: 'wallhack', name: 'Wallhack', description: 'Seeing through walls', icon: '👁️' },
-  { id: 'infinite_health', name: 'Infinite Health', description: 'Unlimited health points', icon: '❤️' },
-  { id: 'score_manipulation', name: 'Score Manipulation', description: 'Artificially inflated scores', icon: '📊' },
-  { id: 'time_manipulation', name: 'Time Manipulation', description: 'Altering game time', icon: '⏰' },
-  { id: 'inventory_duplication', name: 'Inventory Duplication', description: 'Duplicating items', icon: '📦' }
-];
+export interface ActionValidation {
+  isValid: boolean;
+  violations: string[];
+  actionType: string;
+  cooldownRemaining: number;
+  rateLimitExceeded: boolean;
+  suspiciousPattern: boolean;
+}
+
+export interface SecurityStats {
+  totalEvents: number;
+  eventsByType: Record<string, number>;
+  eventsBySeverity: Record<string, number>;
+  activeBans: number;
+  activeWarnings: number;
+  topViolators: Array<{
+    userId: string;
+    violationCount: number;
+    riskScore: number;
+  }>;
+  recentAlerts: SecurityAlert[];
+}
 
 export const SECURITY_EVENTS = {
-  CHEAT_DETECTED: 'cheat_detected',
-  SUSPICIOUS_ACTIVITY: 'suspicious_activity',
-  SECURITY_VIOLATION: 'security_violation',
-  LOGIN_ATTEMPT: 'login_attempt',
-  DATA_BREACH: 'data_breach',
-  SYSTEM_ALERT: 'system_alert'
-};
+  MOVEMENT_ANOMALY: 'movement_anomaly',
+  SPEED_HACK_DETECTED: 'speed_hack_detected',
+  TELEPORT_DETECTED: 'teleport_detected',
+  RATE_LIMIT_EXCEEDED: 'rate_limit_exceeded',
+  SUSPICIOUS_PATTERN: 'suspicious_pattern',
+  CHAT_SPAM: 'chat_spam',
+  TRADE_ANOMALY: 'trade_anomaly',
+  LOGIN_ANOMALY: 'login_anomaly',
+  MULTI_ACCOUNT_DETECTED: 'multi_account_detected',
+  BOT_DETECTED: 'bot_detected'
+} as const;
 
-export const PENALTY_TYPES = [
-  { id: 'warning', name: 'Warning', description: 'First offense warning', duration: 0 },
-  { id: 'temporary_ban', name: 'Temporary Ban', description: 'Temporary account suspension', duration: 1440 }, // 24 hours
-  { id: 'permanent_ban', name: 'Permanent Ban', description: 'Permanent account suspension', duration: -1 },
-  { id: 'score_reset', name: 'Score Reset', description: 'Reset player scores', duration: 0 },
-  { id: 'inventory_wipe', name: 'Inventory Wipe', description: 'Remove all items', duration: 0 }
+export type SecurityEventType = typeof SECURITY_EVENTS[keyof typeof SECURITY_EVENTS];
+
+export const DEFAULT_ANTI_CHEAT_RULES: AntiCheatRule[] = [
+  {
+    id: 'movement_speed',
+    name: 'Movement Speed Validation',
+    description: 'Detects players moving faster than physically possible',
+    type: 'movement',
+    enabled: true,
+    severity: 'warning',
+    conditions: {
+      threshold: 500, // pixels per second
+      timeWindow: 5
+    },
+    actions: {
+      log: true,
+      alert: true,
+      autoAction: false,
+      notifyAdmins: false
+    }
+  },
+  {
+    id: 'teleport_detection',
+    name: 'Teleport Detection',
+    description: 'Detects impossible position changes',
+    type: 'movement',
+    enabled: true,
+    severity: 'kick',
+    conditions: {
+      threshold: 1000, // pixels
+      timeWindow: 1
+    },
+    actions: {
+      log: true,
+      alert: true,
+      autoAction: true,
+      notifyAdmins: true
+    }
+  },
+  {
+    id: 'chat_rate_limit',
+    name: 'Chat Rate Limiting',
+    description: 'Prevents chat spam and flooding',
+    type: 'rate_limit',
+    enabled: true,
+    severity: 'warning',
+    conditions: {
+      threshold: 10, // messages per minute
+      timeWindow: 60
+    },
+    actions: {
+      log: true,
+      alert: false,
+      autoAction: true,
+      notifyAdmins: false
+    }
+  },
+  {
+    id: 'action_spam',
+    name: 'Action Spam Detection',
+    description: 'Detects rapid-fire actions that may indicate automation',
+    type: 'rate_limit',
+    enabled: true,
+    severity: 'warning',
+    conditions: {
+      threshold: 20, // actions per second
+      timeWindow: 1
+    },
+    actions: {
+      log: true,
+      alert: true,
+      autoAction: false,
+      notifyAdmins: false
+    }
+  }
 ];
