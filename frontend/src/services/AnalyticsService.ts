@@ -1,7 +1,7 @@
 import { 
   AnalyticsEvent, 
   PerformanceMetric, 
-  UserBehavior,
+  UserBehavior, 
   AnalyticsDashboard,
   AnalyticsConfig,
   ANALYTICS_EVENTS,
