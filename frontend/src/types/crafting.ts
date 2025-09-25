@@ -1,122 +1,213 @@
-export interface Resource {
-  id: string;
-  name: string;
-  description: string;
-  type: ResourceType;
-  rarity: ResourceRarity;
-  icon: string;
-  value: number;
-  stackSize: number;
-  category: ResourceCategory;
-  source: ResourceSource;
-  metadata: ResourceMetadata;
-}
-
-export interface ResourceNode {
-  id: string;
-  resourceId: string;
-  position: { x: number; y: number };
-  area: string;
-  respawnTime: number;
-  lastHarvested?: Date;
-  isActive: boolean;
-  level: number;
-  experience: number;
-  drops: ResourceDrop[];
-}
-
-export interface ResourceDrop {
-  resourceId: string;
-  minAmount: number;
-  maxAmount: number;
-  chance: number;
-  experience: number;
-}
-
 export interface CraftingRecipe {
   id: string;
   name: string;
   description: string;
   category: CraftingCategory;
-  level: number;
-  experience: number;
-  materials: CraftingMaterial[];
+  difficulty: CraftingDifficulty;
+  requiredLevel: number;
+  requiredSkill: CraftingSkill;
+  requiredSkillLevel: number;
+  ingredients: CraftingIngredient[];
   result: CraftingResult;
-  craftingTime: number;
+  craftingTime: number; // in seconds
+  experienceReward: number;
   isUnlocked: boolean;
-  prerequisites: CraftingPrerequisite[];
+  unlockRequirements?: CraftingRequirement[];
   metadata: CraftingMetadata;
 }
 
-export interface CraftingMaterial {
-  resourceId: string;
-  amount: number;
-  consumed: boolean;
+export interface CraftingIngredient {
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  rarity: ItemRarity;
+  isConsumed: boolean;
+  alternativeItems?: string[]; // Alternative items that can be used
 }
 
 export interface CraftingResult {
   itemId: string;
-  amount: number;
-  chance: number;
-  experience: number;
-}
-
-export interface CraftingPrerequisite {
-  type: 'level' | 'recipe' | 'achievement' | 'quest';
-  value: string | number;
-  description: string;
+  itemName: string;
+  quantity: number;
+  rarity: ItemRarity;
+  quality: ItemQuality;
+  durability?: number;
+  maxDurability?: number;
+  stats?: ItemStats;
 }
 
 export interface CraftingMetadata {
-  difficulty: 'easy' | 'medium' | 'hard' | 'expert';
+  tags: string[];
+  imageUrl?: string;
+  animationUrl?: string;
+  soundEffect?: string;
+  specialEffects?: string[];
+  isTradeable: boolean;
+  isSellable: boolean;
+  baseValue: number;
+  category: string;
+}
+
+export interface ResourceNode {
+  id: string;
+  name: string;
+  type: ResourceType;
+  rarity: ResourceRarity;
+  location: ResourceLocation;
+  respawnTime: number; // in seconds
+  maxHarvests: number;
+  currentHarvests: number;
+  requiredTool?: string;
+  requiredLevel: number;
+  experienceReward: number;
+  possibleDrops: ResourceDrop[];
+  isActive: boolean;
+  lastHarvested?: Date;
+  metadata: ResourceMetadata;
+}
+
+export interface ResourceDrop {
+  itemId: string;
+  itemName: string;
+  dropRate: number; // 0-1
+  minQuantity: number;
+  maxQuantity: number;
+  rarity: ItemRarity;
+}
+
+export interface ResourceLocation {
+  x: number;
+  y: number;
+  mapId: string;
+  area: string;
+}
+
+export interface ResourceMetadata {
+  description: string;
+  imageUrl?: string;
+  animationUrl?: string;
+  soundEffect?: string;
+  visualEffects?: string[];
+  seasonalAvailability?: string[];
+  weatherDependency?: string[];
+}
+
+export interface CraftingSkill {
+  id: string;
+  name: string;
+  level: number;
+  experience: number;
+  experienceToNext: number;
+  maxLevel: number;
+  bonuses: CraftingBonus[];
+  unlockedRecipes: string[];
+  specialization?: CraftingSpecialization;
+}
+
+export interface CraftingBonus {
+  type: BonusType;
+  value: number;
+  description: string;
+  isActive: boolean;
+}
+
+export interface CraftingSpecialization {
+  name: string;
+  description: string;
+  bonuses: CraftingBonus[];
+  unlockedAt: number; // level when unlocked
+}
+
+export interface InventoryItem {
+  id: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  rarity: ItemRarity;
+  quality: ItemQuality;
+  durability?: number;
+  maxDurability?: number;
+  stats?: ItemStats;
+  metadata: ItemMetadata;
+  acquiredAt: Date;
+  isTradeable: boolean;
+  isSellable: boolean;
+  value: number;
+}
+
+export interface ItemStats {
+  attack?: number;
+  defense?: number;
+  speed?: number;
+  magic?: number;
+  health?: number;
+  mana?: number;
+  luck?: number;
+  [key: string]: number | undefined;
+}
+
+export interface ItemMetadata {
+  description: string;
   category: string;
   tags: string[];
   imageUrl?: string;
   animationUrl?: string;
   soundEffect?: string;
+  specialEffects?: string[];
+  craftingRecipe?: string;
+  source?: string;
 }
 
-export interface InventoryItem {
-  id: string;
-  resourceId: string;
-  amount: number;
-  quality: number;
-  durability?: number;
-  maxDurability?: number;
-  metadata: InventoryMetadata;
-  acquiredAt: Date;
-}
-
-export interface InventoryMetadata {
-  source: 'crafted' | 'gathered' | 'traded' | 'reward';
-  crafterId?: string;
-  qualityModifier?: number;
-  specialProperties?: string[];
+export interface CraftingRequirement {
+  type: RequirementType;
+  value: number;
+  description: string;
+  isMet: boolean;
 }
 
 export interface CraftingSession {
   id: string;
-  recipeId: string;
   userId: string;
+  recipeId: string;
   startTime: Date;
   endTime?: Date;
   status: CraftingStatus;
   progress: number;
-  materials: CraftingMaterial[];
+  quality: ItemQuality;
+  bonuses: CraftingBonus[];
+  materials: CraftingIngredient[];
   result?: CraftingResult;
-  experience: number;
+  experienceGained: number;
 }
 
-export interface CraftingSkill {
-  id: string;
+export interface CraftingQueue {
   userId: string;
-  category: CraftingCategory;
-  level: number;
-  experience: number;
-  maxExperience: number;
-  recipesUnlocked: string[];
-  mastery: number;
-  lastUpdated: Date;
+  sessions: CraftingSession[];
+  maxConcurrent: number;
+  isPaused: boolean;
+}
+
+export interface CraftingStation {
+  id: string;
+  name: string;
+  type: CraftingStationType;
+  location: ResourceLocation;
+  requiredLevel: number;
+  availableRecipes: string[];
+  bonuses: CraftingBonus[];
+  isActive: boolean;
+  currentUser?: string;
+  metadata: CraftingStationMetadata;
+}
+
+export interface CraftingStationMetadata {
+  description: string;
+  imageUrl?: string;
+  animationUrl?: string;
+  soundEffect?: string;
+  specialEffects?: string[];
+  capacity: number;
+  efficiency: number;
 }
 
 export interface ResourceGatheringSession {
@@ -126,181 +217,143 @@ export interface ResourceGatheringSession {
   startTime: Date;
   endTime?: Date;
   status: GatheringStatus;
-  resourcesGathered: ResourceGathered[];
-  experience: number;
-  efficiency: number;
+  progress: number;
+  toolUsed?: string;
+  bonuses: GatheringBonus[];
+  drops: ResourceDrop[];
+  experienceGained: number;
 }
 
-export interface ResourceGathered {
-  resourceId: string;
-  amount: number;
+export interface GatheringBonus {
+  type: BonusType;
+  value: number;
+  description: string;
+  source: string; // tool, skill, buff, etc.
+}
+
+export interface CraftingProgress {
+  recipeId: string;
+  sessionId: string;
+  progress: number;
   quality: number;
-  experience: number;
+  timeRemaining: number;
+  bonuses: CraftingBonus[];
 }
 
 export interface CraftingStats {
   totalItemsCrafted: number;
-  totalExperience: number;
+  totalExperienceGained: number;
   favoriteCategory: CraftingCategory;
-  mostCraftedItem: string;
-  averageQuality: number;
-  successRate: number;
+  highestQuality: ItemQuality;
   totalTimeSpent: number;
-  resourcesUsed: Record<string, number>;
+  mostUsedRecipe: string;
+  skillLevels: Record<string, number>;
+  achievements: string[];
 }
-
-export interface ResourceStats {
-  totalResourcesGathered: number;
-  totalExperience: number;
-  favoriteResource: string;
-  mostGatheredResource: string;
-  averageQuality: number;
-  totalTimeSpent: number;
-  nodesVisited: number;
-  efficiency: number;
-}
-
-export interface CraftingLeaderboard {
-  category: CraftingCategory;
-  period: 'daily' | 'weekly' | 'monthly' | 'all';
-  entries: CraftingLeaderboardEntry[];
-  lastUpdated: Date;
-}
-
-export interface CraftingLeaderboardEntry {
-  userId: string;
-  username: string;
-  rank: number;
-  score: number;
-  level: number;
-  itemsCrafted: number;
-  experience: number;
-}
-
-export interface ResourceLeaderboard {
-  period: 'daily' | 'weekly' | 'monthly' | 'all';
-  entries: ResourceLeaderboardEntry[];
-  lastUpdated: Date;
-}
-
-export interface ResourceLeaderboardEntry {
-  userId: string;
-  username: string;
-  rank: number;
-  score: number;
-  resourcesGathered: number;
-  experience: number;
-  efficiency: number;
-}
-
-export interface CraftingNotification {
-  id: string;
-  type: CraftingNotificationType;
-  title: string;
-  message: string;
-  timestamp: Date;
-  isRead: boolean;
-  data?: any;
-}
-
-export interface CraftingEvent {
-  type: CraftingEventType;
-  userId: string;
-  data: any;
-  timestamp: Date;
-}
-
-// Enums
-export type ResourceType = 
-  | 'ore'
-  | 'wood'
-  | 'plant'
-  | 'crystal'
-  | 'gem'
-  | 'metal'
-  | 'fiber'
-  | 'leather'
-  | 'bone'
-  | 'essence';
-
-export type ResourceRarity = 
-  | 'common'
-  | 'uncommon'
-  | 'rare'
-  | 'epic'
-  | 'legendary';
-
-export type ResourceCategory = 
-  | 'materials'
-  | 'components'
-  | 'consumables'
-  | 'special'
-  | 'currency';
-
-export type ResourceSource = 
-  | 'mining'
-  | 'logging'
-  | 'harvesting'
-  | 'fishing'
-  | 'hunting'
-  | 'trading'
-  | 'quest';
 
 export type CraftingCategory = 
   | 'weapons'
   | 'armor'
   | 'tools'
   | 'consumables'
-  | 'decorations'
   | 'materials'
-  | 'special';
+  | 'decorations'
+  | 'jewelry'
+  | 'potions'
+  | 'food'
+  | 'clothing'
+  | 'furniture'
+  | 'vehicles';
+
+export type CraftingDifficulty = 
+  | 'beginner'
+  | 'novice'
+  | 'intermediate'
+  | 'advanced'
+  | 'expert'
+  | 'master';
+
+export type CraftingSkill = 
+  | 'blacksmithing'
+  | 'carpentry'
+  | 'cooking'
+  | 'alchemy'
+  | 'tailoring'
+  | 'jewelry'
+  | 'engineering'
+  | 'enchanting'
+  | 'gardening'
+  | 'fishing';
+
+export type ResourceType = 
+  | 'ore'
+  | 'wood'
+  | 'herbs'
+  | 'gems'
+  | 'leather'
+  | 'cloth'
+  | 'bone'
+  | 'crystal'
+  | 'essence'
+  | 'food';
+
+export type ResourceRarity = 
+  | 'common'
+  | 'uncommon'
+  | 'rare'
+  | 'epic'
+  | 'legendary'
+  | 'mythic';
+
+export type ItemRarity = ResourceRarity;
+
+export type ItemQuality = 
+  | 'poor'
+  | 'common'
+  | 'uncommon'
+  | 'rare'
+  | 'epic'
+  | 'legendary'
+  | 'artifact';
+
+export type BonusType = 
+  | 'speed'
+  | 'quality'
+  | 'experience'
+  | 'durability'
+  | 'critical_chance'
+  | 'resource_bonus'
+  | 'cost_reduction';
+
+export type RequirementType = 
+  | 'level'
+  | 'skill_level'
+  | 'quest_completion'
+  | 'item_owned'
+  | 'achievement'
+  | 'reputation';
 
 export type CraftingStatus = 
-  | 'pending'
+  | 'queued'
   | 'in_progress'
   | 'completed'
   | 'failed'
   | 'cancelled';
 
 export type GatheringStatus = 
-  | 'active'
+  | 'in_progress'
   | 'completed'
-  | 'interrupted'
-  | 'failed';
+  | 'failed'
+  | 'interrupted';
 
-export type CraftingNotificationType = 
-  | 'recipe_unlocked'
-  | 'crafting_complete'
-  | 'skill_level_up'
-  | 'resource_depleted'
-  | 'new_recipe_available'
-  | 'crafting_failed';
-
-export type CraftingEventType = 
-  | 'crafting_started'
-  | 'crafting_completed'
-  | 'crafting_failed'
-  | 'resource_gathered'
-  | 'skill_level_up'
-  | 'recipe_unlocked'
-  | 'inventory_updated';
-
-// Constants
-export const CRAFTING_EVENTS = {
-  CRAFTING_STARTED: 'crafting_started',
-  CRAFTING_COMPLETED: 'crafting_completed',
-  CRAFTING_FAILED: 'crafting_failed',
-  RESOURCE_GATHERED: 'resource_gathered',
-  SKILL_LEVEL_UP: 'skill_level_up',
-  RECIPE_UNLOCKED: 'recipe_unlocked',
-  INVENTORY_UPDATED: 'inventory_updated'
-} as const;
-
-export const CRAFTING_NOTIFICATIONS = {
-  RECIPE_UNLOCKED: 'recipe_unlocked',
-  CRAFTING_COMPLETE: 'crafting_complete',
-  SKILL_LEVEL_UP: 'skill_level_up',
-  RESOURCE_DEPLETED: 'resource_depleted',
-  NEW_RECIPE_AVAILABLE: 'new_recipe_available',
-  CRAFTING_FAILED: 'crafting_failed'
-} as const;
+export type CraftingStationType = 
+  | 'forge'
+  | 'workbench'
+  | 'alchemy_table'
+  | 'cooking_stove'
+  | 'sewing_machine'
+  | 'jewelry_bench'
+  | 'engineering_station'
+  | 'enchanting_table'
+  | 'garden_plot'
+  | 'fishing_spot';

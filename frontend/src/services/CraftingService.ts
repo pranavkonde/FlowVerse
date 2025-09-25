@@ -1,42 +1,33 @@
 import { io, Socket } from 'socket.io-client';
 import {
-  Resource,
-  ResourceNode,
   CraftingRecipe,
+  ResourceNode,
+  CraftingSkill,
   InventoryItem,
   CraftingSession,
-  CraftingSkill,
+  CraftingQueue,
+  CraftingStation,
   ResourceGatheringSession,
+  CraftingProgress,
   CraftingStats,
-  ResourceStats,
-  CraftingLeaderboard,
-  ResourceLeaderboard,
-  CraftingNotification,
-  CraftingEvent,
+  CraftingCategory,
+  CraftingDifficulty,
   ResourceType,
   ResourceRarity,
-  ResourceCategory,
-  CraftingCategory,
+  ItemRarity,
+  ItemQuality,
   CraftingStatus,
   GatheringStatus,
-  CraftingNotificationType,
-  CraftingEventType,
-  CRAFTING_EVENTS,
-  CRAFTING_NOTIFICATIONS
+  CraftingStationType
 } from '../types/crafting';
 
 export class CraftingService {
   private socket: Socket | null = null;
   private isConnected = false;
   private eventListeners: Map<string, Function[]> = new Map();
-  private inventory: Map<string, InventoryItem> = new Map();
-  private skills: Map<CraftingCategory, CraftingSkill> = new Map();
-  private recipes: Map<string, CraftingRecipe> = new Map();
-  private resourceNodes: Map<string, ResourceNode> = new Map();
 
   constructor() {
     this.initializeSocket();
-    this.initializeDefaultData();
   }
 
   private initializeSocket(): void {
@@ -54,180 +45,41 @@ export class CraftingService {
     });
 
     // Crafting system specific listeners
-    this.socket.on('craftingUpdate', (data: any) => {
-      this.emit('craftingUpdate', data);
+    this.socket.on('craftingStarted', (session: CraftingSession) => {
+      this.emit('craftingStarted', session);
     });
 
-    this.socket.on('resourceGathered', (data: any) => {
-      this.emit('resourceGathered', data);
+    this.socket.on('craftingProgress', (progress: CraftingProgress) => {
+      this.emit('craftingProgress', progress);
     });
 
-    this.socket.on('inventoryUpdate', (data: any) => {
-      this.emit('inventoryUpdate', data);
+    this.socket.on('craftingCompleted', (session: CraftingSession) => {
+      this.emit('craftingCompleted', session);
     });
 
-    this.socket.on('skillLevelUp', (data: any) => {
-      this.emit('skillLevelUp', data);
+    this.socket.on('craftingCancelled', (session: CraftingSession) => {
+      this.emit('craftingCancelled', session);
     });
 
-    this.socket.on('recipeUnlocked', (data: any) => {
+    this.socket.on('recipeUnlocked', (data: { userId: string; recipe: CraftingRecipe }) => {
       this.emit('recipeUnlocked', data);
     });
 
-    this.socket.on('craftingNotification', (notification: CraftingNotification) => {
-      this.emit('craftingNotification', notification);
+    this.socket.on('skillUpdated', (data: { userId: string; skill: CraftingSkill }) => {
+      this.emit('skillUpdated', data);
     });
-  }
 
-  private initializeDefaultData(): void {
-    // Initialize default resources
-    const defaultResources: Resource[] = [
-      {
-        id: 'iron-ore',
-        name: 'Iron Ore',
-        description: 'A common metal ore used in basic crafting',
-        type: 'ore',
-        rarity: 'common',
-        icon: '⛏️',
-        value: 10,
-        stackSize: 100,
-        category: 'materials',
-        source: 'mining',
-        metadata: {
-          hardness: 3,
-          weight: 2.5,
-          meltingPoint: 1538
-        }
-      },
-      {
-        id: 'oak-wood',
-        name: 'Oak Wood',
-        description: 'Strong wood from oak trees',
-        type: 'wood',
-        rarity: 'common',
-        icon: '🪵',
-        value: 5,
-        stackSize: 200,
-        category: 'materials',
-        source: 'logging',
-        metadata: {
-          hardness: 2,
-          weight: 1.0,
-          durability: 80
-        }
-      },
-      {
-        id: 'crystal-shard',
-        name: 'Crystal Shard',
-        description: 'A rare crystal with magical properties',
-        type: 'crystal',
-        rarity: 'rare',
-        icon: '💎',
-        value: 100,
-        stackSize: 50,
-        category: 'special',
-        source: 'mining',
-        metadata: {
-          hardness: 8,
-          weight: 0.5,
-          magicalPower: 15
-        }
-      }
-    ];
+    this.socket.on('inventoryUpdated', (data: { userId: string; inventory: InventoryItem[] }) => {
+      this.emit('inventoryUpdated', data);
+    });
 
-    // Initialize default recipes
-    const defaultRecipes: CraftingRecipe[] = [
-      {
-        id: 'iron-sword',
-        name: 'Iron Sword',
-        description: 'A basic iron sword for combat',
-        category: 'weapons',
-        level: 1,
-        experience: 50,
-        materials: [
-          { resourceId: 'iron-ore', amount: 3, consumed: true },
-          { resourceId: 'oak-wood', amount: 1, consumed: true }
-        ],
-        result: {
-          itemId: 'iron-sword',
-          amount: 1,
-          chance: 100,
-          experience: 50
-        },
-        craftingTime: 30,
-        isUnlocked: true,
-        prerequisites: [],
-        metadata: {
-          difficulty: 'easy',
-          category: 'Weapons',
-          tags: ['sword', 'iron', 'basic'],
-          imageUrl: '/images/items/iron-sword.png'
-        }
-      },
-      {
-        id: 'iron-armor',
-        name: 'Iron Armor',
-        description: 'Protective iron armor',
-        category: 'armor',
-        level: 2,
-        experience: 100,
-        materials: [
-          { resourceId: 'iron-ore', amount: 5, consumed: true },
-          { resourceId: 'leather-strip', amount: 2, consumed: true }
-        ],
-        result: {
-          itemId: 'iron-armor',
-          amount: 1,
-          chance: 90,
-          experience: 100
-        },
-        craftingTime: 60,
-        isUnlocked: false,
-        prerequisites: [
-          { type: 'level', value: 2, description: 'Crafting level 2 required' }
-        ],
-        metadata: {
-          difficulty: 'medium',
-          category: 'Armor',
-          tags: ['armor', 'iron', 'protection'],
-          imageUrl: '/images/items/iron-armor.png'
-        }
-      }
-    ];
+    this.socket.on('resourceHarvested', (data: { userId: string; nodeId: string; drops: any[] }) => {
+      this.emit('resourceHarvested', data);
+    });
 
-    // Initialize default resource nodes
-    const defaultNodes: ResourceNode[] = [
-      {
-        id: 'iron-vein-1',
-        resourceId: 'iron-ore',
-        position: { x: 100, y: 200 },
-        area: 'Mining Cave',
-        respawnTime: 300, // 5 minutes
-        isActive: true,
-        level: 1,
-        experience: 10,
-        drops: [
-          { resourceId: 'iron-ore', minAmount: 1, maxAmount: 3, chance: 100, experience: 10 }
-        ]
-      },
-      {
-        id: 'oak-tree-1',
-        resourceId: 'oak-wood',
-        position: { x: 300, y: 150 },
-        area: 'Forest',
-        respawnTime: 600, // 10 minutes
-        isActive: true,
-        level: 1,
-        experience: 5,
-        drops: [
-          { resourceId: 'oak-wood', minAmount: 2, maxAmount: 5, chance: 100, experience: 5 }
-        ]
-      }
-    ];
-
-    // Store default data
-    defaultRecipes.forEach(recipe => this.recipes.set(recipe.id, recipe));
-    defaultNodes.forEach(node => this.resourceNodes.set(node.id, node));
+    this.socket.on('resourceNodeRespawned', (node: ResourceNode) => {
+      this.emit('resourceNodeRespawned', node);
+    });
   }
 
   // Event listener management
@@ -274,84 +126,15 @@ export class CraftingService {
     return this.isConnected;
   }
 
-  // Resource management
-  async getResources(): Promise<Resource[]> {
+  // Crafting management
+  async startCrafting(userId: string, recipeId: string, stationId?: string): Promise<boolean> {
     return new Promise((resolve, reject) => {
       if (!this.socket) {
         reject(new Error('Socket not connected'));
         return;
       }
 
-      this.socket.emit('getResources', (response: { success: boolean; resources?: Resource[]; error?: string }) => {
-        if (response.success && response.resources) {
-          resolve(response.resources);
-        } else {
-          reject(new Error(response.error || 'Failed to get resources'));
-        }
-      });
-    });
-  }
-
-  async getResourceNodes(): Promise<ResourceNode[]> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      this.socket.emit('getResourceNodes', (response: { success: boolean; nodes?: ResourceNode[]; error?: string }) => {
-        if (response.success && response.nodes) {
-          resolve(response.nodes);
-        } else {
-          reject(new Error(response.error || 'Failed to get resource nodes'));
-        }
-      });
-    });
-  }
-
-  async gatherResource(nodeId: string, userId: string): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      this.socket.emit('gatherResource', { nodeId, userId }, (response: { success: boolean; error?: string }) => {
-        if (response.success) {
-          resolve(true);
-        } else {
-          reject(new Error(response.error || 'Failed to gather resource'));
-        }
-      });
-    });
-  }
-
-  // Recipe management
-  async getRecipes(): Promise<CraftingRecipe[]> {
-    return Array.from(this.recipes.values());
-  }
-
-  async getRecipeById(recipeId: string): Promise<CraftingRecipe | null> {
-    return this.recipes.get(recipeId) || null;
-  }
-
-  async getRecipesByCategory(category: CraftingCategory): Promise<CraftingRecipe[]> {
-    return Array.from(this.recipes.values()).filter(recipe => recipe.category === category);
-  }
-
-  async getUnlockedRecipes(userId: string): Promise<CraftingRecipe[]> {
-    return Array.from(this.recipes.values()).filter(recipe => recipe.isUnlocked);
-  }
-
-  // Crafting operations
-  async startCrafting(recipeId: string, userId: string): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      this.socket.emit('startCrafting', { recipeId, userId }, (response: { success: boolean; error?: string }) => {
+      this.socket.emit('startCrafting', { userId, recipeId, stationId }, (response: { success: boolean; error?: string }) => {
         if (response.success) {
           resolve(true);
         } else {
@@ -361,128 +144,142 @@ export class CraftingService {
     });
   }
 
-  async cancelCrafting(sessionId: string, userId: string): Promise<boolean> {
+  async cancelCraftingSession(userId: string, sessionId: string): Promise<boolean> {
     return new Promise((resolve, reject) => {
       if (!this.socket) {
         reject(new Error('Socket not connected'));
         return;
       }
 
-      this.socket.emit('cancelCrafting', { sessionId, userId }, (response: { success: boolean; error?: string }) => {
+      this.socket.emit('cancelCraftingSession', { userId, sessionId }, (response: { success: boolean; error?: string }) => {
         if (response.success) {
           resolve(true);
         } else {
-          reject(new Error(response.error || 'Failed to cancel crafting'));
+          reject(new Error(response.error || 'Failed to cancel crafting session'));
         }
       });
     });
   }
 
-  async getCraftingSessions(userId: string): Promise<CraftingSession[]> {
+  async harvestResource(userId: string, nodeId: string, toolId?: string): Promise<boolean> {
     return new Promise((resolve, reject) => {
       if (!this.socket) {
         reject(new Error('Socket not connected'));
         return;
       }
 
-      this.socket.emit('getCraftingSessions', userId, (response: { success: boolean; sessions?: CraftingSession[]; error?: string }) => {
-        if (response.success && response.sessions) {
-          resolve(response.sessions);
+      this.socket.emit('harvestResource', { userId, nodeId, toolId }, (response: { success: boolean; error?: string }) => {
+        if (response.success) {
+          resolve(true);
         } else {
-          reject(new Error(response.error || 'Failed to get crafting sessions'));
+          reject(new Error(response.error || 'Failed to harvest resource'));
         }
       });
     });
   }
 
-  // Inventory management
-  async getInventory(userId: string): Promise<InventoryItem[]> {
+  async getUserRecipes(userId: string): Promise<CraftingRecipe[]> {
     return new Promise((resolve, reject) => {
       if (!this.socket) {
         reject(new Error('Socket not connected'));
         return;
       }
 
-      this.socket.emit('getInventory', userId, (response: { success: boolean; inventory?: InventoryItem[]; error?: string }) => {
+      this.socket.emit('getUserRecipes', userId, (response: { success: boolean; recipes?: CraftingRecipe[]; error?: string }) => {
+        if (response.success && response.recipes) {
+          resolve(response.recipes);
+        } else {
+          reject(new Error(response.error || 'Failed to get user recipes'));
+        }
+      });
+    });
+  }
+
+  async getAvailableResourceNodes(): Promise<ResourceNode[]> {
+    return new Promise((resolve, reject) => {
+      if (!this.socket) {
+        reject(new Error('Socket not connected'));
+        return;
+      }
+
+      this.socket.emit('getAvailableResourceNodes', (response: { success: boolean; nodes?: ResourceNode[]; error?: string }) => {
+        if (response.success && response.nodes) {
+          resolve(response.nodes);
+        } else {
+          reject(new Error(response.error || 'Failed to get resource nodes'));
+        }
+      });
+    });
+  }
+
+  async getUserInventory(userId: string): Promise<InventoryItem[]> {
+    return new Promise((resolve, reject) => {
+      if (!this.socket) {
+        reject(new Error('Socket not connected'));
+        return;
+      }
+
+      this.socket.emit('getUserInventory', userId, (response: { success: boolean; inventory?: InventoryItem[]; error?: string }) => {
         if (response.success && response.inventory) {
           resolve(response.inventory);
         } else {
-          reject(new Error(response.error || 'Failed to get inventory'));
+          reject(new Error(response.error || 'Failed to get user inventory'));
         }
       });
     });
   }
 
-  async addToInventory(userId: string, item: InventoryItem): Promise<boolean> {
+  async getUserSkills(userId: string): Promise<CraftingSkill[]> {
     return new Promise((resolve, reject) => {
       if (!this.socket) {
         reject(new Error('Socket not connected'));
         return;
       }
 
-      this.socket.emit('addToInventory', { userId, item }, (response: { success: boolean; error?: string }) => {
-        if (response.success) {
-          resolve(true);
-        } else {
-          reject(new Error(response.error || 'Failed to add to inventory'));
-        }
-      });
-    });
-  }
-
-  async removeFromInventory(userId: string, itemId: string, amount: number): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      this.socket.emit('removeFromInventory', { userId, itemId, amount }, (response: { success: boolean; error?: string }) => {
-        if (response.success) {
-          resolve(true);
-        } else {
-          reject(new Error(response.error || 'Failed to remove from inventory'));
-        }
-      });
-    });
-  }
-
-  // Skill management
-  async getSkills(userId: string): Promise<CraftingSkill[]> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      this.socket.emit('getSkills', userId, (response: { success: boolean; skills?: CraftingSkill[]; error?: string }) => {
+      this.socket.emit('getUserSkills', userId, (response: { success: boolean; skills?: CraftingSkill[]; error?: string }) => {
         if (response.success && response.skills) {
           resolve(response.skills);
         } else {
-          reject(new Error(response.error || 'Failed to get skills'));
+          reject(new Error(response.error || 'Failed to get user skills'));
         }
       });
     });
   }
 
-  async getSkillByCategory(userId: string, category: CraftingCategory): Promise<CraftingSkill | null> {
+  async getCraftingStations(): Promise<CraftingStation[]> {
     return new Promise((resolve, reject) => {
       if (!this.socket) {
         reject(new Error('Socket not connected'));
         return;
       }
 
-      this.socket.emit('getSkillByCategory', { userId, category }, (response: { success: boolean; skill?: CraftingSkill; error?: string }) => {
-        if (response.success) {
-          resolve(response.skill || null);
+      this.socket.emit('getCraftingStations', (response: { success: boolean; stations?: CraftingStation[]; error?: string }) => {
+        if (response.success && response.stations) {
+          resolve(response.stations);
         } else {
-          reject(new Error(response.error || 'Failed to get skill'));
+          reject(new Error(response.error || 'Failed to get crafting stations'));
         }
       });
     });
   }
 
-  // Statistics
+  async getUserCraftingQueue(userId: string): Promise<CraftingQueue | null> {
+    return new Promise((resolve, reject) => {
+      if (!this.socket) {
+        reject(new Error('Socket not connected'));
+        return;
+      }
+
+      this.socket.emit('getUserCraftingQueue', userId, (response: { success: boolean; queue?: CraftingQueue; error?: string }) => {
+        if (response.success) {
+          resolve(response.queue || null);
+        } else {
+          reject(new Error(response.error || 'Failed to get crafting queue'));
+        }
+      });
+    });
+  }
+
   async getCraftingStats(userId: string): Promise<CraftingStats> {
     return new Promise((resolve, reject) => {
       if (!this.socket) {
@@ -500,163 +297,242 @@ export class CraftingService {
     });
   }
 
-  async getResourceStats(userId: string): Promise<ResourceStats> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      this.socket.emit('getResourceStats', userId, (response: { success: boolean; stats?: ResourceStats; error?: string }) => {
-        if (response.success && response.stats) {
-          resolve(response.stats);
-        } else {
-          reject(new Error(response.error || 'Failed to get resource stats'));
-        }
-      });
-    });
-  }
-
-  // Leaderboards
-  async getCraftingLeaderboard(category: CraftingCategory, period: 'daily' | 'weekly' | 'monthly' | 'all'): Promise<CraftingLeaderboard> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      this.socket.emit('getCraftingLeaderboard', { category, period }, (response: { success: boolean; leaderboard?: CraftingLeaderboard; error?: string }) => {
-        if (response.success && response.leaderboard) {
-          resolve(response.leaderboard);
-        } else {
-          reject(new Error(response.error || 'Failed to get crafting leaderboard'));
-        }
-      });
-    });
-  }
-
-  async getResourceLeaderboard(period: 'daily' | 'weekly' | 'monthly' | 'all'): Promise<ResourceLeaderboard> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      this.socket.emit('getResourceLeaderboard', period, (response: { success: boolean; leaderboard?: ResourceLeaderboard; error?: string }) => {
-        if (response.success && response.leaderboard) {
-          resolve(response.leaderboard);
-        } else {
-          reject(new Error(response.error || 'Failed to get resource leaderboard'));
-        }
-      });
-    });
-  }
-
-  // Notifications
-  async getNotifications(userId: string): Promise<CraftingNotification[]> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      this.socket.emit('getCraftingNotifications', userId, (response: { success: boolean; notifications?: CraftingNotification[]; error?: string }) => {
-        if (response.success && response.notifications) {
-          resolve(response.notifications);
-        } else {
-          reject(new Error(response.error || 'Failed to get notifications'));
-        }
-      });
-    });
-  }
-
-  async markNotificationAsRead(notificationId: string): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      this.socket.emit('markCraftingNotificationAsRead', notificationId, (response: { success: boolean; error?: string }) => {
-        if (response.success) {
-          resolve(true);
-        } else {
-          reject(new Error(response.error || 'Failed to mark notification as read'));
-        }
-      });
-    });
-  }
-
   // Utility functions
-  canCraftRecipe(recipe: CraftingRecipe, inventory: InventoryItem[]): boolean {
-    return recipe.materials.every(material => {
-      const item = inventory.find(i => i.resourceId === material.resourceId);
-      return item && item.amount >= material.amount;
-    });
+  canCraftRecipe(recipe: CraftingRecipe, userSkills: CraftingSkill[], inventory: InventoryItem[]): boolean {
+    // Check skill requirements
+    const skill = userSkills.find(s => s.id === recipe.requiredSkill);
+    if (!skill || skill.level < recipe.requiredSkillLevel) {
+      return false;
+    }
+
+    // Check material requirements
+    for (const ingredient of recipe.ingredients) {
+      const item = inventory.find(i => i.itemId === ingredient.itemId);
+      if (!item || item.quantity < ingredient.quantity) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
-  getRequiredMaterials(recipe: CraftingRecipe, inventory: InventoryItem[]): { material: CraftingMaterial; available: number; required: number }[] {
-    return recipe.materials.map(material => {
-      const item = inventory.find(i => i.resourceId === material.resourceId);
-      return {
-        material,
-        available: item ? item.amount : 0,
-        required: material.amount
-      };
-    });
-  }
-
-  calculateCraftingTime(recipe: CraftingRecipe, skill: CraftingSkill): number {
-    const baseTime = recipe.craftingTime;
-    const skillBonus = Math.max(0, skill.level - recipe.level) * 0.1; // 10% reduction per level above requirement
-    return Math.max(baseTime * 0.5, baseTime - (baseTime * skillBonus)); // Minimum 50% of base time
-  }
-
-  calculateSuccessChance(recipe: CraftingRecipe, skill: CraftingSkill): number {
-    const baseChance = recipe.result.chance;
-    const skillBonus = Math.max(0, skill.level - recipe.level) * 2; // 2% bonus per level above requirement
-    return Math.min(100, baseChance + skillBonus);
-  }
-
-  getResourceRarityColor(rarity: ResourceRarity): string {
+  getRecipeDifficultyColor(difficulty: CraftingDifficulty): string {
     const colors = {
-      common: 'text-gray-400',
-      uncommon: 'text-green-400',
-      rare: 'text-blue-400',
-      epic: 'text-purple-400',
-      legendary: 'text-yellow-400'
+      'beginner': 'text-green-500',
+      'novice': 'text-blue-500',
+      'intermediate': 'text-yellow-500',
+      'advanced': 'text-orange-500',
+      'expert': 'text-red-500',
+      'master': 'text-purple-500'
+    };
+    return colors[difficulty] || 'text-gray-500';
+  }
+
+  getRarityColor(rarity: ItemRarity): string {
+    const colors = {
+      'common': 'text-gray-400',
+      'uncommon': 'text-green-400',
+      'rare': 'text-blue-400',
+      'epic': 'text-purple-400',
+      'legendary': 'text-orange-400',
+      'mythic': 'text-red-400'
     };
     return colors[rarity] || 'text-gray-400';
   }
 
-  getResourceRarityBgColor(rarity: ResourceRarity): string {
+  getQualityColor(quality: ItemQuality): string {
     const colors = {
-      common: 'bg-gray-500/20',
-      uncommon: 'bg-green-500/20',
-      rare: 'bg-blue-500/20',
-      epic: 'bg-purple-500/20',
-      legendary: 'bg-yellow-500/20'
+      'poor': 'text-gray-500',
+      'common': 'text-white',
+      'uncommon': 'text-green-300',
+      'rare': 'text-blue-300',
+      'epic': 'text-purple-300',
+      'legendary': 'text-orange-300',
+      'artifact': 'text-red-300'
     };
-    return colors[rarity] || 'bg-gray-500/20';
+    return colors[quality] || 'text-white';
   }
 
   formatCraftingTime(seconds: number): string {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    
-    if (minutes > 0) {
+    if (seconds < 60) {
+      return `${seconds}s`;
+    } else if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
       return `${minutes}m ${remainingSeconds}s`;
-    } else {
-      return `${remainingSeconds}s`;
+        } else {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      return `${hours}h ${minutes}m`;
     }
   }
 
-  getSkillProgress(skill: CraftingSkill): number {
-    return (skill.experience / skill.maxExperience) * 100;
+  getResourceTypeIcon(type: ResourceType): string {
+    const icons = {
+      'ore': '⛏️',
+      'wood': '🪵',
+      'herbs': '🌿',
+      'gems': '💎',
+      'leather': '🦌',
+      'cloth': '🧵',
+      'bone': '🦴',
+      'crystal': '🔮',
+      'essence': '✨',
+      'food': '🍎'
+    };
+    return icons[type] || '📦';
   }
 
-  getNextLevelExperience(skill: CraftingSkill): number {
-    return skill.maxExperience - skill.experience;
+  getCraftingCategoryIcon(category: CraftingCategory): string {
+    const icons = {
+      'weapons': '⚔️',
+      'armor': '🛡️',
+      'tools': '🔧',
+      'consumables': '🧪',
+      'materials': '📦',
+      'decorations': '🎨',
+      'jewelry': '💍',
+      'potions': '🧪',
+      'food': '🍎',
+      'clothing': '👕',
+      'furniture': '🪑',
+      'vehicles': '🚗'
+    };
+    return icons[category] || '🔨';
+  }
+
+  getCraftingStationIcon(type: CraftingStationType): string {
+    const icons = {
+      'forge': '🔥',
+      'workbench': '🔨',
+      'alchemy_table': '🧪',
+      'cooking_stove': '🍳',
+      'sewing_machine': '🧵',
+      'jewelry_bench': '💍',
+      'engineering_station': '⚙️',
+      'enchanting_table': '✨',
+      'garden_plot': '🌱',
+      'fishing_spot': '🎣'
+    };
+    return icons[type] || '🔧';
+  }
+
+  calculateItemValue(item: InventoryItem): number {
+    let baseValue = item.value;
+    
+    // Apply quality multiplier
+    const qualityMultipliers = {
+      'poor': 0.5,
+      'common': 1.0,
+      'uncommon': 1.5,
+      'rare': 2.0,
+      'epic': 3.0,
+      'legendary': 5.0,
+      'artifact': 10.0
+    };
+    
+    const qualityMultiplier = qualityMultipliers[item.quality] || 1.0;
+    baseValue *= qualityMultiplier;
+    
+    // Apply rarity multiplier
+    const rarityMultipliers = {
+      'common': 1.0,
+      'uncommon': 1.2,
+      'rare': 1.5,
+      'epic': 2.0,
+      'legendary': 3.0,
+      'mythic': 5.0
+    };
+    
+    const rarityMultiplier = rarityMultipliers[item.rarity] || 1.0;
+    baseValue *= rarityMultiplier;
+    
+    return Math.floor(baseValue);
+  }
+
+  getSkillProgressPercentage(skill: CraftingSkill): number {
+    if (skill.level >= skill.maxLevel) return 100;
+    return Math.floor((skill.experience / skill.experienceToNext) * 100);
+  }
+
+  getResourceNodeStatus(node: ResourceNode): string {
+    if (!node.isActive) {
+      if (node.lastHarvested) {
+        const now = new Date();
+        const elapsed = (now.getTime() - node.lastHarvested.getTime()) / 1000;
+        const remaining = Math.max(0, node.respawnTime - elapsed);
+        return `Respawns in ${this.formatCraftingTime(remaining)}`;
+      }
+      return 'Depleted';
+    }
+    return 'Available';
+  }
+
+  canHarvestResource(node: ResourceNode, userLevel: number, toolId?: string): boolean {
+    if (!node.isActive) return false;
+    if (userLevel < node.requiredLevel) return false;
+    if (node.requiredTool && toolId !== node.requiredTool) return false;
+    return true;
+  }
+
+  getResourceNodeRarityColor(rarity: ResourceRarity): string {
+    const colors = {
+      'common': 'text-gray-400',
+      'uncommon': 'text-green-400',
+      'rare': 'text-blue-400',
+      'epic': 'text-purple-400',
+      'legendary': 'text-orange-400',
+      'mythic': 'text-red-400'
+    };
+    return colors[rarity] || 'text-gray-400';
+  }
+
+  sortInventoryByCategory(inventory: InventoryItem[]): Record<string, InventoryItem[]> {
+    const sorted: Record<string, InventoryItem[]> = {};
+    
+    inventory.forEach(item => {
+      const category = item.metadata.category;
+      if (!sorted[category]) {
+        sorted[category] = [];
+      }
+      sorted[category].push(item);
+    });
+    
+    return sorted;
+  }
+
+  searchInventory(inventory: InventoryItem[], query: string): InventoryItem[] {
+    if (!query.trim()) return inventory;
+    
+    const lowercaseQuery = query.toLowerCase();
+    return inventory.filter(item => 
+      item.itemName.toLowerCase().includes(lowercaseQuery) ||
+      item.metadata.description.toLowerCase().includes(lowercaseQuery) ||
+      item.metadata.tags.some(tag => tag.toLowerCase().includes(lowercaseQuery))
+    );
+  }
+
+  filterRecipesByCategory(recipes: CraftingRecipe[], category: CraftingCategory | 'all'): CraftingRecipe[] {
+    if (category === 'all') return recipes;
+    return recipes.filter(recipe => recipe.category === category);
+  }
+
+  filterRecipesByDifficulty(recipes: CraftingRecipe[], difficulty: CraftingDifficulty | 'all'): CraftingRecipe[] {
+    if (difficulty === 'all') return recipes;
+    return recipes.filter(recipe => recipe.difficulty === difficulty);
+  }
+
+  getCraftingSessionProgress(session: CraftingSession): number {
+    return session.progress;
+  }
+
+  getCraftingSessionTimeRemaining(session: CraftingSession): number {
+    if (session.status !== 'in_progress') return 0;
+    
+    const now = new Date();
+    const elapsed = (now.getTime() - session.startTime.getTime()) / 1000;
+    // This would need to be calculated based on the recipe's crafting time
+    return Math.max(0, 30 - elapsed); // Assuming 30 seconds for now
   }
 }
 
