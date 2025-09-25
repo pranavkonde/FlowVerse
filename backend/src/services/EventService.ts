@@ -75,6 +75,140 @@ export class EventService {
         }
       },
       {
+        id: 'seasonal-spring-2024',
+        name: 'Spring Bloom Celebration',
+        description: 'Welcome spring with blooming flowers, new life, and fresh adventures',
+        type: 'seasonal',
+        status: 'upcoming',
+        startDate: new Date('2024-03-20'),
+        endDate: new Date('2024-04-20'),
+        rewards: [
+          {
+            id: 'spring-crown',
+            type: 'nft',
+            amount: 1,
+            itemId: 'spring-crown-001',
+            rarity: 'epic',
+            description: 'Flower Crown of Spring'
+          },
+          {
+            id: 'spring-seeds',
+            type: 'nft',
+            amount: 10,
+            itemId: 'magic-seeds',
+            rarity: 'rare',
+            description: 'Magic Spring Seeds'
+          }
+        ],
+        requirements: [
+          {
+            type: 'level',
+            value: 3,
+            description: 'Minimum level 3 required'
+          }
+        ],
+        participants: [],
+        maxParticipants: 1500,
+        metadata: {
+          theme: 'Spring Bloom',
+          difficulty: 'easy',
+          category: 'Seasonal',
+          tags: ['spring', 'flowers', 'nature', 'renewal'],
+          imageUrl: '/images/events/spring-festival.jpg',
+          backgroundMusic: 'spring-theme.mp3',
+          specialEffects: ['flower-petals', 'butterflies', 'rainbow']
+        }
+      },
+      {
+        id: 'seasonal-summer-2024',
+        name: 'Summer Solstice Adventure',
+        description: 'Embrace the longest day with beach parties, water activities, and summer fun',
+        type: 'seasonal',
+        status: 'upcoming',
+        startDate: new Date('2024-06-21'),
+        endDate: new Date('2024-07-21'),
+        rewards: [
+          {
+            id: 'summer-sunglasses',
+            type: 'nft',
+            amount: 1,
+            itemId: 'summer-sunglasses-001',
+            rarity: 'epic',
+            description: 'Cool Summer Sunglasses'
+          },
+          {
+            id: 'beach-tokens',
+            type: 'token',
+            amount: 2000,
+            rarity: 'rare',
+            description: 'Beach Party Tokens'
+          }
+        ],
+        requirements: [
+          {
+            type: 'level',
+            value: 7,
+            description: 'Minimum level 7 required'
+          }
+        ],
+        participants: [],
+        maxParticipants: 2000,
+        metadata: {
+          theme: 'Summer Beach',
+          difficulty: 'medium',
+          category: 'Seasonal',
+          tags: ['summer', 'beach', 'water', 'party'],
+          imageUrl: '/images/events/summer-festival.jpg',
+          backgroundMusic: 'summer-theme.mp3',
+          specialEffects: ['waves', 'sunshine', 'palm-trees']
+        }
+      },
+      {
+        id: 'seasonal-autumn-2024',
+        name: 'Harvest Festival of Colors',
+        description: 'Celebrate the harvest season with golden leaves, pumpkin carving, and cozy gatherings',
+        type: 'seasonal',
+        status: 'upcoming',
+        startDate: new Date('2024-09-22'),
+        endDate: new Date('2024-10-22'),
+        rewards: [
+          {
+            id: 'autumn-scarf',
+            type: 'nft',
+            amount: 1,
+            itemId: 'autumn-scarf-001',
+            rarity: 'epic',
+            description: 'Warm Autumn Scarf'
+          },
+          {
+            id: 'harvest-basket',
+            type: 'nft',
+            amount: 1,
+            itemId: 'harvest-basket-001',
+            rarity: 'rare',
+            description: 'Bountiful Harvest Basket'
+          }
+        ],
+        requirements: [
+          {
+            type: 'level',
+            value: 6,
+            description: 'Minimum level 6 required'
+          }
+        ],
+        participants: [],
+        maxParticipants: 1200,
+        metadata: {
+          theme: 'Autumn Harvest',
+          difficulty: 'medium',
+          category: 'Seasonal',
+          tags: ['autumn', 'harvest', 'pumpkins', 'cozy'],
+          imageUrl: '/images/events/autumn-festival.jpg',
+          backgroundMusic: 'autumn-theme.mp3',
+          specialEffects: ['falling-leaves', 'pumpkin-glow', 'warm-light']
+        }
+      },
+      {
         id: 'community-challenge-001',
         name: 'Community Building Challenge',
         description: 'Work together with other players to build the ultimate community structure',
@@ -155,6 +289,140 @@ export class EventService {
           category: 'Competitive',
           tags: ['puzzle', 'tournament', 'competitive'],
           imageUrl: '/images/events/puzzle-tournament.jpg'
+        }
+      },
+      {
+        id: 'limited-new-year-2024',
+        name: 'New Year Countdown Extravaganza',
+        description: 'Ring in the new year with exclusive fireworks, countdown events, and rare rewards',
+        type: 'limited_time',
+        status: 'upcoming',
+        startDate: new Date('2024-12-31T20:00:00Z'),
+        endDate: new Date('2025-01-01T06:00:00Z'),
+        rewards: [
+          {
+            id: 'new-year-crown',
+            type: 'nft',
+            amount: 1,
+            itemId: 'new-year-crown-2024',
+            rarity: 'legendary',
+            description: 'Exclusive New Year Crown'
+          },
+          {
+            id: 'fireworks-pack',
+            type: 'nft',
+            amount: 50,
+            itemId: 'fireworks-pack-2024',
+            rarity: 'epic',
+            description: 'New Year Fireworks Pack'
+          }
+        ],
+        requirements: [
+          {
+            type: 'level',
+            value: 1,
+            description: 'Any level welcome'
+          }
+        ],
+        participants: [],
+        maxParticipants: 5000,
+        metadata: {
+          theme: 'New Year Celebration',
+          difficulty: 'easy',
+          category: 'Limited Time',
+          tags: ['new-year', 'fireworks', 'celebration', 'exclusive'],
+          imageUrl: '/images/events/new-year-2024.jpg',
+          backgroundMusic: 'new-year-theme.mp3',
+          specialEffects: ['fireworks', 'confetti', 'countdown']
+        }
+      },
+      {
+        id: 'limited-valentine-2024',
+        name: 'Valentine\'s Day Love Festival',
+        description: 'Spread love and friendship with special Valentine\'s Day activities and romantic rewards',
+        type: 'limited_time',
+        status: 'upcoming',
+        startDate: new Date('2024-02-14T00:00:00Z'),
+        endDate: new Date('2024-02-14T23:59:59Z'),
+        rewards: [
+          {
+            id: 'valentine-heart',
+            type: 'nft',
+            amount: 1,
+            itemId: 'valentine-heart-2024',
+            rarity: 'epic',
+            description: 'Glowing Valentine Heart'
+          },
+          {
+            id: 'love-tokens',
+            type: 'token',
+            amount: 1500,
+            rarity: 'rare',
+            description: 'Valentine Love Tokens'
+          }
+        ],
+        requirements: [
+          {
+            type: 'level',
+            value: 2,
+            description: 'Minimum level 2 required'
+          }
+        ],
+        participants: [],
+        maxParticipants: 3000,
+        metadata: {
+          theme: 'Valentine\'s Day',
+          difficulty: 'easy',
+          category: 'Limited Time',
+          tags: ['valentine', 'love', 'friendship', 'romance'],
+          imageUrl: '/images/events/valentine-2024.jpg',
+          backgroundMusic: 'valentine-theme.mp3',
+          specialEffects: ['hearts', 'roses', 'romantic-glow']
+        }
+      },
+      {
+        id: 'limited-halloween-2024',
+        name: 'Spooky Halloween Night',
+        description: 'Trick or treat in the virtual world with haunted houses, costume contests, and spooky rewards',
+        type: 'limited_time',
+        status: 'upcoming',
+        startDate: new Date('2024-10-31T18:00:00Z'),
+        endDate: new Date('2024-11-01T06:00:00Z'),
+        rewards: [
+          {
+            id: 'halloween-costume',
+            type: 'nft',
+            amount: 1,
+            itemId: 'halloween-costume-2024',
+            rarity: 'epic',
+            description: 'Spooky Halloween Costume'
+          },
+          {
+            id: 'candy-bag',
+            type: 'nft',
+            amount: 1,
+            itemId: 'candy-bag-2024',
+            rarity: 'rare',
+            description: 'Trick or Treat Candy Bag'
+          }
+        ],
+        requirements: [
+          {
+            type: 'level',
+            value: 4,
+            description: 'Minimum level 4 required'
+          }
+        ],
+        participants: [],
+        maxParticipants: 2500,
+        metadata: {
+          theme: 'Halloween Spooky',
+          difficulty: 'medium',
+          category: 'Limited Time',
+          tags: ['halloween', 'spooky', 'costumes', 'candy'],
+          imageUrl: '/images/events/halloween-2024.jpg',
+          backgroundMusic: 'halloween-theme.mp3',
+          specialEffects: ['fog', 'spooky-lights', 'bats']
         }
       }
     ];
@@ -527,6 +795,122 @@ export class EventService {
   getSeasonalEvents(season: string): Event[] {
     return Array.from(this.events.values())
       .filter(event => event.type === 'seasonal' && event.metadata.theme.toLowerCase().includes(season.toLowerCase()));
+  }
+
+  // Get current seasonal theme
+  getCurrentSeasonalTheme(): string {
+    const month = new Date().getMonth();
+    if (month >= 2 && month <= 4) return 'Spring Bloom';
+    if (month >= 5 && month <= 7) return 'Summer Beach';
+    if (month >= 8 && month <= 10) return 'Autumn Harvest';
+    return 'Winter Festival';
+  }
+
+  // Get seasonal decorations for current season
+  getCurrentSeasonalDecorations(): string[] {
+    const season = this.getCurrentSeason();
+    const decorations = {
+      spring: ['🌸', '🌷', '🦋', '🌿', '☀️'],
+      summer: ['☀️', '🌊', '🏖️', '🌺', '🍉'],
+      autumn: ['🍂', '🎃', '🌰', '🍁', '🦃'],
+      winter: ['❄️', '⛄', '🎄', '🎁', '🦌']
+    };
+    return decorations[season as keyof typeof decorations] || ['🎯'];
+  }
+
+  // Get current season
+  getCurrentSeason(): string {
+    const month = new Date().getMonth();
+    if (month >= 2 && month <= 4) return 'spring';
+    if (month >= 5 && month <= 7) return 'summer';
+    if (month >= 8 && month <= 10) return 'autumn';
+    return 'winter';
+  }
+
+  // Create seasonal event automatically
+  createSeasonalEvent(season: string): Event | null {
+    const seasonThemes = {
+      spring: {
+        name: 'Spring Bloom Celebration',
+        description: 'Welcome spring with blooming flowers, new life, and fresh adventures',
+        theme: 'Spring Bloom',
+        tags: ['spring', 'flowers', 'nature', 'renewal'],
+        specialEffects: ['flower-petals', 'butterflies', 'rainbow']
+      },
+      summer: {
+        name: 'Summer Solstice Adventure',
+        description: 'Embrace the longest day with beach parties, water activities, and summer fun',
+        theme: 'Summer Beach',
+        tags: ['summer', 'beach', 'water', 'party'],
+        specialEffects: ['waves', 'sunshine', 'palm-trees']
+      },
+      autumn: {
+        name: 'Harvest Festival of Colors',
+        description: 'Celebrate the harvest season with golden leaves, pumpkin carving, and cozy gatherings',
+        theme: 'Autumn Harvest',
+        tags: ['autumn', 'harvest', 'pumpkins', 'cozy'],
+        specialEffects: ['falling-leaves', 'pumpkin-glow', 'warm-light']
+      },
+      winter: {
+        name: 'Winter Wonderland Festival',
+        description: 'Celebrate the winter season with special activities and exclusive rewards',
+        theme: 'Winter Festival',
+        tags: ['winter', 'festival', 'exclusive'],
+        specialEffects: ['snow', 'ice-crystals', 'aurora']
+      }
+    };
+
+    const theme = seasonThemes[season as keyof typeof seasonThemes];
+    if (!theme) return null;
+
+    const eventId = `seasonal-${season}-${new Date().getFullYear()}`;
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + 1);
+
+    const event: Event = {
+      id: eventId,
+      name: theme.name,
+      description: theme.description,
+      type: 'seasonal',
+      status: 'active',
+      startDate,
+      endDate,
+      rewards: [
+        {
+          id: `${season}-reward-1`,
+          type: 'nft',
+          amount: 1,
+          itemId: `${season}-item-001`,
+          rarity: 'epic',
+          description: `Exclusive ${season} Item`
+        }
+      ],
+      requirements: [
+        {
+          type: 'level',
+          value: 1,
+          description: 'Any level welcome'
+        }
+      ],
+      participants: [],
+      maxParticipants: 1000,
+      metadata: {
+        theme: theme.theme,
+        difficulty: 'medium',
+        category: 'Seasonal',
+        tags: theme.tags,
+        imageUrl: `/images/events/${season}-festival.jpg`,
+        backgroundMusic: `${season}-theme.mp3`,
+        specialEffects: theme.specialEffects
+      }
+    };
+
+    this.events.set(eventId, event);
+    this.initializeEventObjectives(eventId);
+    this.io.emit('eventUpdate', event);
+
+    return event;
   }
 
   // Get limited-time events

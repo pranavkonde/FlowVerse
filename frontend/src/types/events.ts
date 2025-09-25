@@ -138,3 +138,24 @@ export type NotificationType =
   | 'reward_available'
   | 'leaderboard_update'
   | 'reminder';
+
+export interface EventStats {
+  totalEvents: number;
+  activeEvents: number;
+  upcomingEvents: number;
+  totalParticipants: number;
+  totalRewardsDistributed: number;
+  averageEventDuration: number;
+  popularEventTypes: Array<{
+    type: EventType;
+    count: number;
+  }>;
+}
+
+export interface EventProgressUpdate {
+  eventId: string;
+  userId: string;
+  objectiveId: string;
+  progress: number;
+  timestamp: Date;
+}
