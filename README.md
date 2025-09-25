@@ -39,6 +39,22 @@ Free Flow transports users to an interactive, 2D multiplayer virtual environment
 - **Text-to-Speech**: ElevenLabs integration for audio feedback
 - **Smart Notifications**: Context-aware notification system
 
+### 🐾 Pet & Companion System
+- **Pet Adoption**: Adopt and care for various species of pets with unique traits
+- **Pet Training**: Train pets to learn new skills and improve their abilities
+- **Pet Battles**: Engage in strategic turn-based battles with other players' pets
+- **Pet Care**: Feed, groom, and care for pets to maintain their health and happiness
+- **Pet Marketplace**: Trade and sell pets with other players
+- **Pet Achievements**: Unlock achievements through pet care and battle victories
+
+### ⚔️ Advanced Combat System
+- **Character Classes**: Choose from 20+ unique character classes with distinct abilities
+- **Skill Trees**: Develop and master skills across multiple categories
+- **Equipment System**: Equip weapons, armor, and accessories with stat bonuses
+- **PvP Combat**: Engage in strategic battles with other players
+- **PvE Content**: Battle AI enemies and bosses for rewards
+- **Tournament System**: Participate in competitive tournaments and leaderboards
+
 ## 🏗️ Architecture
 
 This comprehensive multiplayer 2D virtual NYC skyscraper environment consists of multiple integrated components:
@@ -65,6 +81,10 @@ This comprehensive multiplayer 2D virtual NYC skyscraper environment consists of
 - Weather system with dynamic effects
 - Analytics dashboard with detailed statistics
 - Character customization with items and cosmetics
+- Pet adoption, training, and battle system
+- Advanced combat with character classes and skill trees
+- Equipment system with stat bonuses and effects
+- Tournament system with competitive rankings
 
 ### Backend Services
 - **Socket.io Server**: Real-time multiplayer synchronization
@@ -74,6 +94,8 @@ This comprehensive multiplayer 2D virtual NYC skyscraper environment consists of
   - Quest progress tracking and completion
   - Leaderboard updates and statistics
   - Weather system simulation and effects
+  - Pet system management and battles
+  - Combat system with real-time battles
 - **AI Agent Server**: Blockchain operations and AI interaction
   - GOAT SDK integration for on-chain operations
   - Custom token swap plugin for Flow ecosystem
@@ -81,6 +103,17 @@ This comprehensive multiplayer 2D virtual NYC skyscraper environment consists of
   - ElevenLabs integration for text-to-speech
   - Caching and rate limiting services
   - Performance monitoring and analytics
+- **Pet Service**: Comprehensive pet management system
+  - Pet adoption and breeding mechanics
+  - Training and skill development
+  - Battle system with turn-based combat
+  - Care system with health and happiness tracking
+  - Marketplace for pet trading
+- **Combat Service**: Advanced combat system
+  - Character class management and progression
+  - Skill trees and equipment systems
+  - PvP and PvE battle mechanics
+  - Tournament and leaderboard systems
 
 ### Smart Contracts (Cadence)
 - **FreeFlowToken.cdc**: Fungible token contract with minting and burning
@@ -424,14 +457,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📊 Project Statistics
 
-- **Total Commits**: 18+ (and growing)
-- **Lines of Code**: 12,000+ across all components
+- **Total Commits**: 20+ (and growing)
+- **Lines of Code**: 15,000+ across all components
 - **Smart Contracts**: 5 Cadence contracts with comprehensive testing
-- **Frontend Components**: 15+ React components
-- **Backend Services**: 8+ microservices
-- **API Endpoints**: 20+ RESTful endpoints
+- **Frontend Components**: 20+ React components
+- **Backend Services**: 10+ microservices
+- **API Endpoints**: 30+ RESTful endpoints
 - **Test Coverage**: 90%+ for smart contracts
 - **Documentation**: Comprehensive README and API docs
+- **New Features**: Pet System and Advanced Combat System
 
 ## 🎯 Roadmap
 
@@ -455,9 +489,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [x] Staking system with time-locked rewards
 - [x] Community governance system
 
-### Phase 4: Enhanced Gameplay 🚧
-- [ ] Advanced AI NPCs
-- [ ] Mini-games and competitions
+### Phase 4: Enhanced Gameplay ✅
+- [x] Advanced AI NPCs
+- [x] Mini-games and competitions
+- [x] Pet & Companion System
+- [x] Advanced Combat System
 - [ ] Seasonal events
 - [ ] Cross-chain integration
 
