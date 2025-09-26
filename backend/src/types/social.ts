@@ -351,7 +351,6 @@ export type HubType =
 export type FeatureType = 
   | 'chat'
   | 'voice'
-  | 'voice'
   | 'video'
   | 'gaming'
   | 'trading'
