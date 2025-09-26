@@ -1,356 +1,491 @@
-export interface House {
+export interface PlayerHouse {
   id: string;
-  ownerId: string;
+  userId: string;
   name: string;
   description: string;
-  type: HouseType;
+  location: HouseLocation;
   size: HouseSize;
-  position: { x: number; y: number };
-  area: string;
+  theme: HouseTheme;
   level: number;
   experience: number;
-  maxExperience: number;
+  experienceToNext: number;
+  maxLevel: number;
   isPublic: boolean;
   isLocked: boolean;
   password?: string;
-  theme: HouseTheme;
-  decorations: Decoration[];
-  furniture: Furniture[];
-  rooms: Room[];
-  visitors: HouseVisitor[];
-  metadata: HouseMetadata;
   createdAt: Date;
-  updatedAt: Date;
+  lastModified: Date;
+  metadata: HouseMetadata;
 }
 
-export interface Room {
-  id: string;
-  houseId: string;
-  name: string;
-  type: RoomType;
-  position: { x: number; y: number };
-  size: { width: number; height: number };
-  decorations: Decoration[];
-  furniture: Furniture[];
-  theme: RoomTheme;
-  isLocked: boolean;
-  metadata: RoomMetadata;
+export interface HouseLocation {
+  x: number;
+  y: number;
+  mapId: string;
+  area: string;
+  coordinates: string; // e.g., "A1", "B3"
 }
 
-export interface Decoration {
-  id: string;
-  houseId: string;
-  roomId?: string;
-  type: DecorationType;
-  name: string;
+export interface HouseSize {
+  width: number;
+  height: number;
+  floors: number;
+  rooms: number;
+  maxRooms: number;
+  maxFloors: number;
+}
+
+export interface HouseMetadata {
   description: string;
-  position: { x: number; y: number };
-  rotation: number;
-  scale: number;
-  layer: number;
-  isVisible: boolean;
-  isInteractive: boolean;
-  rarity: DecorationRarity;
-  category: DecorationCategory;
-  source: DecorationSource;
-  metadata: DecorationMetadata;
-  acquiredAt: Date;
+  imageUrl?: string;
+  backgroundMusic?: string;
+  specialEffects?: string[];
+  tags: string[];
+  isTradeable: boolean;
+  isSellable: boolean;
+  baseValue: number;
+  category: string;
 }
 
 export interface Furniture {
   id: string;
-  houseId: string;
-  roomId?: string;
-  type: FurnitureType;
   name: string;
   description: string;
-  position: { x: number; y: number };
-  rotation: number;
-  scale: number;
-  layer: number;
-  isVisible: boolean;
-  isInteractive: boolean;
-  functionality: FurnitureFunctionality;
-  rarity: FurnitureRarity;
   category: FurnitureCategory;
-  source: FurnitureSource;
+  subcategory: string;
+  rarity: ItemRarity;
+  quality: ItemQuality;
+  size: FurnitureSize;
+  placement: FurniturePlacement;
+  stats?: FurnitureStats;
+  interactions: FurnitureInteraction[];
+  requirements: FurnitureRequirement[];
+  cost: FurnitureCost;
   metadata: FurnitureMetadata;
-  acquiredAt: Date;
 }
 
-export interface HouseVisitor {
+export interface FurnitureSize {
+  width: number;
+  height: number;
+  depth: number;
+  weight: number;
+}
+
+export interface FurniturePlacement {
+  allowedFloors: number[];
+  allowedRooms: string[];
+  requiresWall: boolean;
+  requiresFloor: boolean;
+  requiresCeiling: boolean;
+  canRotate: boolean;
+  canStack: boolean;
+  maxStackHeight: number;
+}
+
+export interface FurnitureStats {
+  comfort: number;
+  beauty: number;
+  functionality: number;
+  durability: number;
+  maxDurability: number;
+  energyEfficiency?: number;
+  storageCapacity?: number;
+  seatingCapacity?: number;
+  sleepingCapacity?: number;
+}
+
+export interface FurnitureInteraction {
+  id: string;
+  name: string;
+  description: string;
+  type: InteractionType;
+  cooldown: number;
+  requirements: InteractionRequirement[];
+  effects: InteractionEffect[];
+  rewards: InteractionReward[];
+}
+
+export interface InteractionRequirement {
+  type: RequirementType;
+  value: number;
+  description: string;
+  isMet: boolean;
+}
+
+export interface InteractionEffect {
+  type: EffectType;
+  value: number;
+  duration: number;
+  description: string;
+}
+
+export interface InteractionReward {
+  type: RewardType;
+  itemId?: string;
+  amount: number;
+  rarity: ItemRarity;
+  description: string;
+}
+
+export interface FurnitureCost {
+  gold: number;
+  materials: FurnitureMaterial[];
+  timeToCraft: number;
+  requiredLevel: number;
+  requiredSkills: SkillRequirement[];
+}
+
+export interface FurnitureMaterial {
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  rarity: ItemRarity;
+  isConsumed: boolean;
+}
+
+export interface SkillRequirement {
+  skillName: string;
+  level: number;
+  description: string;
+}
+
+export interface FurnitureMetadata {
+  tags: string[];
+  imageUrl?: string;
+  animationUrl?: string;
+  soundEffect?: string;
+  specialEffects?: string[];
+  isTradeable: boolean;
+  isSellable: boolean;
+  baseValue: number;
+  category: string;
+  source: string;
+  seasonalAvailability?: string[];
+  weatherDependency?: string[];
+}
+
+export interface PlacedFurniture {
+  id: string;
+  furnitureId: string;
+  houseId: string;
+  roomId: string;
+  position: Position3D;
+  rotation: Rotation3D;
+  scale: Scale3D;
+  placedAt: Date;
+  lastUsed?: Date;
+  durability: number;
+  maxDurability: number;
+  isActive: boolean;
+  isLocked: boolean;
+  customizations: FurnitureCustomization[];
+  interactions: PlacedFurnitureInteraction[];
+  metadata: PlacedFurnitureMetadata;
+}
+
+export interface Position3D {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface Rotation3D {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface Scale3D {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface FurnitureCustomization {
+  id: string;
+  type: CustomizationType;
+  value: string;
+  description: string;
+  cost: number;
+  isApplied: boolean;
+}
+
+export interface PlacedFurnitureInteraction {
+  id: string;
+  interactionId: string;
+  lastUsed: Date;
+  cooldownEnd: Date;
+  isAvailable: boolean;
+  usageCount: number;
+  totalRewards: number;
+}
+
+export interface PlacedFurnitureMetadata {
+  description: string;
+  notes: string;
+  tags: string[];
+  isPublic: boolean;
+  isLocked: boolean;
+  customName?: string;
+}
+
+export interface HouseRoom {
+  id: string;
+  houseId: string;
+  name: string;
+  type: RoomType;
+  floor: number;
+  position: Position2D;
+  size: RoomSize;
+  theme: RoomTheme;
+  isLocked: boolean;
+  isPublic: boolean;
+  furniture: PlacedFurniture[];
+  decorations: RoomDecoration[];
+  lighting: RoomLighting;
+  temperature: number;
+  humidity: number;
+  airQuality: number;
+  comfort: number;
+  beauty: number;
+  functionality: number;
+  metadata: RoomMetadata;
+}
+
+export interface Position2D {
+  x: number;
+  y: number;
+}
+
+export interface RoomSize {
+  width: number;
+  height: number;
+}
+
+export interface RoomDecoration {
+  id: string;
+  name: string;
+  type: DecorationType;
+  position: Position2D;
+  rotation: number;
+  scale: number;
+  isActive: boolean;
+  effects: DecorationEffect[];
+}
+
+export interface RoomLighting {
+  ambientLight: number;
+  directionalLight: number;
+  pointLights: PointLight[];
+  colorTemperature: number;
+  brightness: number;
+  isAutomatic: boolean;
+  schedule: LightingSchedule[];
+}
+
+export interface PointLight {
+  id: string;
+  position: Position3D;
+  color: string;
+  intensity: number;
+  range: number;
+  isActive: boolean;
+}
+
+export interface LightingSchedule {
+  id: string;
+  time: string; // HH:MM format
+  brightness: number;
+  colorTemperature: number;
+  isActive: boolean;
+}
+
+export interface DecorationEffect {
+  type: EffectType;
+  value: number;
+  duration: number;
+  description: string;
+}
+
+export interface RoomMetadata {
+  description: string;
+  imageUrl?: string;
+  backgroundMusic?: string;
+  specialEffects?: string[];
+  tags: string[];
+  isTradeable: boolean;
+  isSellable: boolean;
+  baseValue: number;
+  category: string;
+}
+
+export interface HouseGuest {
   id: string;
   houseId: string;
   userId: string;
   username: string;
-  avatar: string;
-  visitTime: Date;
-  duration: number;
-  rating?: number;
-  comment?: string;
-  isOnline: boolean;
+  invitedBy: string;
+  invitedAt: Date;
+  lastVisit: Date;
+  visitCount: number;
+  permissions: GuestPermission[];
+  isActive: boolean;
+  notes: string;
 }
 
-export interface HouseTemplate {
-  id: string;
-  name: string;
+export interface GuestPermission {
+  type: PermissionType;
+  level: PermissionLevel;
   description: string;
-  type: HouseType;
-  size: HouseSize;
-  theme: HouseTheme;
-  rooms: RoomTemplate[];
-  decorations: DecorationTemplate[];
-  furniture: FurnitureTemplate[];
-  level: number;
-  cost: number;
-  isUnlocked: boolean;
-  prerequisites: HousePrerequisite[];
-  metadata: HouseTemplateMetadata;
-}
-
-export interface RoomTemplate {
-  id: string;
-  name: string;
-  type: RoomType;
-  size: { width: number; height: number };
-  theme: RoomTheme;
-  decorations: DecorationTemplate[];
-  furniture: FurnitureTemplate[];
-}
-
-export interface DecorationTemplate {
-  id: string;
-  type: DecorationType;
-  name: string;
-  description: string;
-  position: { x: number; y: number };
-  rotation: number;
-  scale: number;
-  layer: number;
-  rarity: DecorationRarity;
-  category: DecorationCategory;
-  metadata: DecorationMetadata;
-}
-
-export interface FurnitureTemplate {
-  id: string;
-  type: FurnitureType;
-  name: string;
-  description: string;
-  position: { x: number; y: number };
-  rotation: number;
-  scale: number;
-  layer: number;
-  functionality: FurnitureFunctionality;
-  rarity: FurnitureRarity;
-  category: FurnitureCategory;
-  metadata: FurnitureMetadata;
-}
-
-export interface HousePrerequisite {
-  type: 'level' | 'achievement' | 'quest' | 'item';
-  value: string | number;
-  description: string;
-}
-
-export interface HouseMetadata {
-  totalValue: number;
-  decorationCount: number;
-  furnitureCount: number;
-  roomCount: number;
-  visitorCount: number;
-  averageRating: number;
-  lastVisited: Date;
-  specialFeatures: string[];
-  tags: string[];
-}
-
-export interface RoomMetadata {
-  decorationCount: number;
-  furnitureCount: number;
-  totalValue: number;
-  specialFeatures: string[];
-  tags: string[];
-}
-
-export interface DecorationMetadata {
-  imageUrl: string;
-  animationUrl?: string;
-  soundEffect?: string;
-  particleEffect?: string;
-  interactable: boolean;
-  collectible: boolean;
-  tradeable: boolean;
-  stackable: boolean;
-  stackSize: number;
-  value: number;
-  weight: number;
-  dimensions: { width: number; height: number; depth: number };
-  tags: string[];
-}
-
-export interface FurnitureMetadata {
-  imageUrl: string;
-  animationUrl?: string;
-  soundEffect?: string;
-  particleEffect?: string;
-  interactable: boolean;
-  collectible: boolean;
-  tradeable: boolean;
-  stackable: boolean;
-  stackSize: number;
-  value: number;
-  weight: number;
-  dimensions: { width: number; height: number; depth: number };
-  functionality: string[];
-  tags: string[];
-}
-
-export interface HouseTemplateMetadata {
-  imageUrl: string;
-  previewImages: string[];
-  videoUrl?: string;
-  tags: string[];
-  difficulty: 'easy' | 'medium' | 'hard' | 'expert';
-  estimatedTime: number;
-  popularity: number;
-  rating: number;
-}
-
-export interface HouseStats {
-  totalHouses: number;
-  totalRooms: number;
-  totalDecorations: number;
-  totalFurniture: number;
-  totalVisitors: number;
-  averageRating: number;
-  totalValue: number;
-  favoriteTheme: HouseTheme;
-  mostPopularRoom: RoomType;
-  mostUsedDecoration: DecorationType;
-  mostUsedFurniture: FurnitureType;
-  timeSpent: number;
-  lastActivity: Date;
-}
-
-export interface HouseLeaderboard {
-  period: 'daily' | 'weekly' | 'monthly' | 'all';
-  category: 'visitors' | 'rating' | 'value' | 'creativity';
-  entries: HouseLeaderboardEntry[];
-  lastUpdated: Date;
-}
-
-export interface HouseLeaderboardEntry {
-  houseId: string;
-  ownerId: string;
-  ownerName: string;
-  houseName: string;
-  rank: number;
-  score: number;
-  level: number;
-  visitors: number;
-  rating: number;
-  value: number;
-  creativity: number;
-}
-
-export interface HouseNotification {
-  id: string;
-  type: HouseNotificationType;
-  title: string;
-  message: string;
-  timestamp: Date;
-  isRead: boolean;
-  data?: any;
-}
-
-export interface HouseEvent {
-  type: HouseEventType;
-  houseId: string;
-  userId: string;
-  data: any;
-  timestamp: Date;
+  isGranted: boolean;
 }
 
 export interface HouseVisit {
   id: string;
   houseId: string;
   visitorId: string;
-  visitTime: Date;
+  visitorUsername: string;
+  visitedAt: Date;
   duration: number;
-  rating?: number;
-  comment?: string;
+  roomsVisited: string[];
+  interactions: string[];
+  rating: number;
+  comment: string;
   isPublic: boolean;
 }
 
-export interface HouseInvite {
+export interface HouseRating {
   id: string;
   houseId: string;
-  inviterId: string;
-  inviteeId: string;
-  message: string;
-  expiresAt: Date;
-  isAccepted: boolean;
-  isDeclined: boolean;
-  createdAt: Date;
-}
-
-export interface HousePermission {
   userId: string;
-  houseId: string;
-  permissions: HousePermissionType[];
-  grantedBy: string;
-  grantedAt: Date;
-  expiresAt?: Date;
+  username: string;
+  rating: number;
+  comment: string;
+  categories: RatingCategory[];
+  createdAt: Date;
+  isPublic: boolean;
 }
 
-export interface HouseShare {
+export interface RatingCategory {
+  category: string;
+  rating: number;
+  comment: string;
+}
+
+export interface HouseUpgrade {
   id: string;
   houseId: string;
-  ownerId: string;
-  shareType: HouseShareType;
-  shareCode: string;
-  expiresAt: Date;
-  maxUses: number;
-  currentUses: number;
+  type: UpgradeType;
+  level: number;
+  maxLevel: number;
+  cost: UpgradeCost;
+  benefits: UpgradeBenefit[];
+  requirements: UpgradeRequirement[];
+  isUnlocked: boolean;
   isActive: boolean;
-  createdAt: Date;
+  metadata: UpgradeMetadata;
 }
 
-// Enums
-export type HouseType = 
-  | 'cottage'
-  | 'mansion'
-  | 'castle'
-  | 'apartment'
-  | 'treehouse'
-  | 'cave'
-  | 'floating'
-  | 'underground'
-  | 'sky'
-  | 'water';
+export interface UpgradeCost {
+  gold: number;
+  materials: FurnitureMaterial[];
+  timeToComplete: number;
+  requiredLevel: number;
+}
 
-export type HouseSize = 
-  | 'small'
-  | 'medium'
-  | 'large'
-  | 'extra_large'
-  | 'mega';
+export interface UpgradeBenefit {
+  type: BenefitType;
+  value: number;
+  description: string;
+  isActive: boolean;
+}
+
+export interface UpgradeRequirement {
+  type: RequirementType;
+  value: number;
+  description: string;
+  isMet: boolean;
+}
+
+export interface UpgradeMetadata {
+  name: string;
+  description: string;
+  imageUrl?: string;
+  animationUrl?: string;
+  soundEffect?: string;
+  specialEffects?: string[];
+  tags: string[];
+  category: string;
+}
+
+export interface HouseStats {
+  totalHouses: number;
+  totalRooms: number;
+  totalFurniture: number;
+  totalVisits: number;
+  averageRating: number;
+  totalUpgrades: number;
+  favoriteTheme: HouseTheme;
+  mostPopularRoom: RoomType;
+  totalValue: number;
+  achievements: string[];
+}
+
+export interface HousingAchievement {
+  id: string;
+  name: string;
+  description: string;
+  category: AchievementCategory;
+  rarity: ItemRarity;
+  requirements: AchievementRequirement[];
+  rewards: AchievementReward[];
+  isUnlocked: boolean;
+  unlockedAt?: Date;
+  progress: number;
+  maxProgress: number;
+  metadata: AchievementMetadata;
+}
+
+export interface AchievementRequirement {
+  type: RequirementType;
+  value: number;
+  description: string;
+  isMet: boolean;
+}
+
+export interface AchievementReward {
+  type: RewardType;
+  itemId?: string;
+  amount: number;
+  rarity: ItemRarity;
+  description: string;
+}
+
+export interface AchievementMetadata {
+  imageUrl?: string;
+  animationUrl?: string;
+  soundEffect?: string;
+  specialEffects?: string[];
+  tags: string[];
+  category: string;
+  isTradeable: boolean;
+  isSellable: boolean;
+  baseValue: number;
+}
 
 export type HouseTheme = 
   | 'modern'
+  | 'classic'
+  | 'rustic'
+  | 'futuristic'
   | 'medieval'
-  | 'fantasy'
-  | 'sci_fi'
-  | 'nature'
-  | 'gothic'
+  | 'tropical'
   | 'minimalist'
   | 'vintage'
-  | 'tropical'
-  | 'winter'
-  | 'spring'
-  | 'summer'
-  | 'autumn';
+  | 'industrial'
+  | 'fantasy'
+  | 'steampunk'
+  | 'cyberpunk';
 
 export type RoomType = 
   | 'living_room'
@@ -359,221 +494,184 @@ export type RoomType =
   | 'bathroom'
   | 'study'
   | 'dining_room'
-  | 'garden'
-  | 'basement'
-  | 'attic'
   | 'garage'
+  | 'garden'
+  | 'balcony'
+  | 'attic'
+  | 'basement'
   | 'workshop'
-  | 'library'
   | 'gym'
+  | 'library'
   | 'entertainment'
   | 'storage';
 
-export type RoomTheme = 
-  | 'modern'
-  | 'classic'
-  | 'rustic'
-  | 'elegant'
-  | 'cozy'
-  | 'minimalist'
-  | 'vintage'
-  | 'industrial'
-  | 'bohemian'
-  | 'scandinavian';
-
-export type DecorationType = 
-  | 'painting'
-  | 'sculpture'
-  | 'plant'
-  | 'lamp'
-  | 'candle'
-  | 'vase'
-  | 'clock'
-  | 'mirror'
-  | 'trophy'
-  | 'book'
-  | 'crystal'
-  | 'gem'
-  | 'artifact'
-  | 'banner'
-  | 'flag'
-  | 'tapestry'
-  | 'rug'
-  | 'curtain'
-  | 'wallpaper'
-  | 'flooring';
-
-export type DecorationRarity = 
-  | 'common'
-  | 'uncommon'
-  | 'rare'
-  | 'epic'
-  | 'legendary'
-  | 'mythic';
-
-export type DecorationCategory = 
-  | 'wall'
-  | 'floor'
-  | 'ceiling'
-  | 'furniture'
-  | 'lighting'
-  | 'nature'
-  | 'art'
-  | 'collectible'
-  | 'special'
-  | 'seasonal';
-
-export type DecorationSource = 
-  | 'crafted'
-  | 'purchased'
-  | 'quest'
-  | 'achievement'
-  | 'event'
-  | 'trade'
-  | 'gift'
-  | 'found';
-
-export type FurnitureType = 
-  | 'chair'
-  | 'table'
-  | 'bed'
-  | 'sofa'
-  | 'desk'
-  | 'bookshelf'
-  | 'cabinet'
-  | 'dresser'
-  | 'wardrobe'
-  | 'chest'
-  | 'bench'
-  | 'stool'
-  | 'ottoman'
-  | 'recliner'
-  | 'rocking_chair'
-  | 'dining_set'
-  | 'coffee_table'
-  | 'side_table'
-  | 'nightstand'
-  | 'entertainment_center';
-
-export type FurnitureRarity = 
-  | 'common'
-  | 'uncommon'
-  | 'rare'
-  | 'epic'
-  | 'legendary'
-  | 'mythic';
+export type RoomTheme = HouseTheme;
 
 export type FurnitureCategory = 
   | 'seating'
+  | 'tables'
   | 'storage'
-  | 'surface'
-  | 'sleeping'
-  | 'dining'
-  | 'entertainment'
-  | 'work'
-  | 'decorative'
-  | 'functional'
-  | 'special';
-
-export type FurnitureSource = 
-  | 'crafted'
-  | 'purchased'
-  | 'quest'
-  | 'achievement'
-  | 'event'
-  | 'trade'
-  | 'gift'
-  | 'found';
-
-export type FurnitureFunctionality = 
-  | 'none'
-  | 'storage'
-  | 'seating'
-  | 'sleeping'
-  | 'working'
-  | 'entertainment'
+  | 'lighting'
   | 'decoration'
-  | 'interactive'
-  | 'special';
+  | 'electronics'
+  | 'appliances'
+  | 'bedding'
+  | 'kitchen'
+  | 'bathroom'
+  | 'outdoor'
+  | 'office'
+  | 'entertainment'
+  | 'plants'
+  | 'artwork'
+  | 'flooring'
+  | 'wallpaper'
+  | 'ceiling';
 
-export type HouseNotificationType = 
-  | 'visitor_arrived'
-  | 'visitor_left'
-  | 'house_rated'
-  | 'house_shared'
-  | 'house_invited'
-  | 'house_permission_granted'
-  | 'house_permission_revoked'
-  | 'house_level_up'
-  | 'house_featured'
-  | 'house_contest_won';
+export type DecorationType = 
+  | 'wall_hanging'
+  | 'floor_decoration'
+  | 'ceiling_decoration'
+  | 'window_treatment'
+  | 'plant'
+  | 'artwork'
+  | 'sculpture'
+  | 'lighting'
+  | 'rug'
+  | 'curtain';
 
-export type HouseEventType = 
-  | 'house_created'
-  | 'house_updated'
-  | 'house_deleted'
-  | 'room_added'
-  | 'room_removed'
-  | 'decoration_placed'
-  | 'decoration_removed'
-  | 'furniture_placed'
-  | 'furniture_removed'
-  | 'visitor_arrived'
-  | 'visitor_left'
-  | 'house_rated'
-  | 'house_shared'
-  | 'house_invited'
-  | 'house_permission_changed'
-  | 'house_level_up'
-  | 'house_featured';
+export type InteractionType = 
+  | 'sit'
+  | 'sleep'
+  | 'work'
+  | 'cook'
+  | 'clean'
+  | 'entertain'
+  | 'exercise'
+  | 'study'
+  | 'relax'
+  | 'socialize'
+  | 'craft'
+  | 'garden'
+  | 'custom';
 
-export type HousePermissionType = 
+export type EffectType = 
+  | 'comfort'
+  | 'beauty'
+  | 'functionality'
+  | 'energy'
+  | 'health'
+  | 'happiness'
+  | 'productivity'
+  | 'creativity'
+  | 'social'
+  | 'relaxation'
+  | 'exercise'
+  | 'learning';
+
+export type RewardType = 
+  | 'experience'
+  | 'gold'
+  | 'item'
+  | 'achievement'
+  | 'skill_point'
+  | 'buff'
+  | 'cosmetic'
+  | 'currency';
+
+export type RequirementType = 
+  | 'level'
+  | 'skill_level'
+  | 'item_owned'
+  | 'achievement'
+  | 'reputation'
+  | 'quest_completion'
+  | 'time_played'
+  | 'house_level'
+  | 'room_count'
+  | 'furniture_count';
+
+export type CustomizationType = 
+  | 'color'
+  | 'texture'
+  | 'pattern'
+  | 'size'
+  | 'material'
+  | 'finish'
+  | 'accessory'
+  | 'lighting'
+  | 'sound'
+  | 'animation';
+
+export type PermissionType = 
   | 'view'
-  | 'edit'
-  | 'decorate'
-  | 'furnish'
-  | 'invite'
-  | 'manage'
+  | 'interact'
+  | 'place_furniture'
+  | 'remove_furniture'
+  | 'modify_room'
+  | 'invite_guests'
+  | 'manage_permissions'
   | 'admin';
 
-export type HouseShareType = 
-  | 'public'
-  | 'private'
-  | 'friends'
-  | 'guild'
-  | 'temporary';
+export type PermissionLevel = 
+  | 'none'
+  | 'basic'
+  | 'standard'
+  | 'advanced'
+  | 'full';
 
-// Constants
-export const HOUSE_EVENTS = {
-  HOUSE_CREATED: 'house_created',
-  HOUSE_UPDATED: 'house_updated',
-  HOUSE_DELETED: 'house_deleted',
-  ROOM_ADDED: 'room_added',
-  ROOM_REMOVED: 'room_removed',
-  DECORATION_PLACED: 'decoration_placed',
-  DECORATION_REMOVED: 'decoration_removed',
-  FURNITURE_PLACED: 'furniture_placed',
-  FURNITURE_REMOVED: 'furniture_removed',
-  VISITOR_ARRIVED: 'visitor_arrived',
-  VISITOR_LEFT: 'visitor_left',
-  HOUSE_RATED: 'house_rated',
-  HOUSE_SHARED: 'house_shared',
-  HOUSE_INVITED: 'house_invited',
-  HOUSE_PERMISSION_CHANGED: 'house_permission_changed',
-  HOUSE_LEVEL_UP: 'house_level_up',
-  HOUSE_FEATURED: 'house_featured'
-} as const;
+export type UpgradeType = 
+  | 'size_expansion'
+  | 'room_addition'
+  | 'floor_addition'
+  | 'automation'
+  | 'security'
+  | 'energy_efficiency'
+  | 'comfort'
+  | 'beauty'
+  | 'functionality'
+  | 'storage'
+  | 'lighting'
+  | 'climate_control';
 
-export const HOUSE_NOTIFICATIONS = {
-  VISITOR_ARRIVED: 'visitor_arrived',
-  VISITOR_LEFT: 'visitor_left',
-  HOUSE_RATED: 'house_rated',
-  HOUSE_SHARED: 'house_shared',
-  HOUSE_INVITED: 'house_invited',
-  HOUSE_PERMISSION_GRANTED: 'house_permission_granted',
-  HOUSE_PERMISSION_REVOKED: 'house_permission_revoked',
-  HOUSE_LEVEL_UP: 'house_level_up',
-  HOUSE_FEATURED: 'house_featured',
-  HOUSE_CONTEST_WON: 'house_contest_won'
-} as const;
+export type BenefitType = 
+  | 'capacity'
+  | 'efficiency'
+  | 'comfort'
+  | 'beauty'
+  | 'functionality'
+  | 'security'
+  | 'automation'
+  | 'energy_savings'
+  | 'storage_space'
+  | 'lighting_quality'
+  | 'climate_control'
+  | 'entertainment';
 
+export type AchievementCategory = 
+  | 'furniture'
+  | 'decoration'
+  | 'room_design'
+  | 'house_management'
+  | 'social'
+  | 'creativity'
+  | 'efficiency'
+  | 'collection'
+  | 'special_events'
+  | 'milestones';
+
+export type ItemRarity = 
+  | 'common'
+  | 'uncommon'
+  | 'rare'
+  | 'epic'
+  | 'legendary'
+  | 'mythic';
+
+export type ItemQuality = 
+  | 'poor'
+  | 'common'
+  | 'uncommon'
+  | 'rare'
+  | 'epic'
+  | 'legendary'
+  | 'artifact';
