@@ -589,3 +589,4 @@ export default function PetSystem({ userId, onClose, onToggle }: PetSystemProps)
   );
 }
 
+
