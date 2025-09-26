@@ -1244,3 +1244,4 @@ export const COMBAT_NOTIFICATIONS = {
   RANK_CHANGE: 'combat_rank_change',
   REWARD_CLAIMED: 'combat_reward_claimed'
 } as const;
+
