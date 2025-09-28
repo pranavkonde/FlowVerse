@@ -1,12 +1,16 @@
 import { Socket } from 'socket.io';
 import { GameService } from '../services/GameService';
+import { AchievementService } from '../services/AchievementService';
 import { Player } from '../types/game';
+import { RequirementType } from '../types/achievements';
 
 export class GameController {
   private gameService: GameService;
+  private achievementService: AchievementService;
 
-  constructor(gameService: GameService) {
+  constructor(gameService: GameService, achievementService?: AchievementService) {
     this.gameService = gameService;
+    this.achievementService = achievementService || new AchievementService();
   }
 
   handleJoinGame(socket: Socket, data: { userId: string; username: string; roomCode: string }) {
@@ -39,6 +43,9 @@ export class GameController {
         });
 
         console.log(`Player ${data.username} joined room ${data.roomCode}`);
+        
+        // Track achievement progress
+        this.achievementService.updateUserProgress(data.userId, RequirementType.ROOMS_VISITED, 1);
       } else {
         socket.emit('error', 'Failed to join room. Room may be full.');
       }
@@ -64,10 +71,18 @@ export class GameController {
 
   handlePlayerMove(socket: Socket, data: { userId: string; x: number; y: number }) {
     try {
-      this.gameService.updatePlayerPosition(data.userId, data.x, data.y);
-      
       const player = this.gameService.getPlayer(data.userId);
       if (player) {
+        // Calculate distance moved
+        const distance = Math.sqrt(
+          Math.pow(data.x - player.x, 2) + Math.pow(data.y - player.y, 2)
+        );
+        
+        this.gameService.updatePlayerPosition(data.userId, data.x, data.y);
+        
+        // Track distance traveled for achievements
+        this.achievementService.updateUserProgress(data.userId, RequirementType.DISTANCE_TRAVELED, distance);
+        
         // Broadcast movement to other players in the same room
         socket.to(player.roomCode).emit('player-move', {
           userId: data.userId,
@@ -83,6 +98,9 @@ export class GameController {
   handlePlayerEmote(socket: Socket, data: { userId: string; emote: string }) {
     try {
       this.gameService.updatePlayerEmote(data.userId, data.emote);
+      
+      // Track emote usage for achievements
+      this.achievementService.updateUserProgress(data.userId, RequirementType.EMOTES_USED, 1);
       
       const player = this.gameService.getPlayer(data.userId);
       if (player) {
@@ -101,6 +119,9 @@ export class GameController {
     try {
       const player = this.gameService.getPlayer(data.userId);
       if (player) {
+        // Track voice command usage for achievements
+        this.achievementService.updateUserProgress(data.userId, RequirementType.VOICE_COMMANDS, 1);
+        
         // Broadcast voice command to other players in the same room
         socket.to(player.roomCode).emit('voice-command', {
           userId: data.userId,

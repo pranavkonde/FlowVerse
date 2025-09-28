@@ -11,6 +11,7 @@ import { NPCService } from './services/NPCService';
 import { AntiCheatService } from './services/AntiCheatService';
 import { AnalyticsService } from './services/AnalyticsService';
 import { EventService } from './services/EventService';
+import { AchievementService } from './services/AchievementService';
 import { 
   securityHeaders, 
   createRateLimit, 
@@ -46,7 +47,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Initialize services
 const gameService = new GameService();
-const gameController = new GameController(gameService);
+const achievementService = new AchievementService();
+const gameController = new GameController(gameService, achievementService);
 const chatService = new ChatService(io);
 const miniGameService = new MiniGameService();
 const npcService = new NPCService();
@@ -396,6 +398,104 @@ app.get('/api/events/limited-time', (req, res) => {
 app.get('/api/events/stats', (req, res) => {
   const stats = eventService.getEventStats();
   res.json({ stats });
+});
+
+// Achievement API routes
+app.get('/api/achievements', (req, res) => {
+  const achievements = achievementService.getAchievements();
+  res.json({ achievements });
+});
+
+app.get('/api/achievements/:achievementId', (req, res) => {
+  const achievement = achievementService.getAchievement(req.params.achievementId);
+  if (!achievement) {
+    return res.status(404).json({ error: 'Achievement not found' });
+  }
+  res.json({ achievement });
+});
+
+app.get('/api/achievements/category/:category', (req, res) => {
+  const achievements = achievementService.getAchievementsByCategory(req.params.category as any);
+  res.json({ achievements });
+});
+
+app.get('/api/achievements/user/:userId', (req, res) => {
+  const userAchievements = achievementService.getUserAchievements(req.params.userId);
+  res.json({ userAchievements });
+});
+
+app.get('/api/achievements/user/:userId/progress/:achievementId', (req, res) => {
+  const progress = achievementService.getUserAchievementProgress(
+    req.params.userId, 
+    req.params.achievementId
+  );
+  if (!progress) {
+    return res.status(404).json({ error: 'Achievement progress not found' });
+  }
+  res.json({ progress });
+});
+
+app.get('/api/achievements/user/:userId/stats', (req, res) => {
+  const stats = achievementService.getUserAchievementStats(req.params.userId);
+  res.json({ stats });
+});
+
+app.post('/api/achievements/user/:userId/progress', (req, res) => {
+  try {
+    const { requirementType, amount, metadata } = req.body;
+    achievementService.updateUserProgress(req.params.userId, requirementType, amount, metadata);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/achievements/user/:userId/claim/:achievementId', (req, res) => {
+  try {
+    const success = achievementService.claimAchievementReward(req.params.userId, req.params.achievementId);
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: 'Failed to claim reward' });
+    }
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Admin achievement routes
+app.post('/api/admin/achievements', (req, res) => {
+  try {
+    const achievement = achievementService.createAchievement(req.body);
+    res.json({ achievement });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.put('/api/admin/achievements/:achievementId', (req, res) => {
+  try {
+    const achievement = achievementService.updateAchievement(req.params.achievementId, req.body);
+    if (!achievement) {
+      return res.status(404).json({ error: 'Achievement not found' });
+    }
+    res.json({ achievement });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete('/api/admin/achievements/:achievementId', (req, res) => {
+  try {
+    const success = achievementService.deleteAchievement(req.params.achievementId);
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: 'Achievement not found' });
+    }
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 // Socket.io connection handling
