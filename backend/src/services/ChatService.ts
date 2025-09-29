@@ -1,364 +1,203 @@
-import { Server as SocketIOServer, Socket } from 'socket.io';
-import { ChatMessage, ChatRoom, ChatModeration } from '../types/chat';
+import { EventEmitter } from 'events';
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  content: string;
+  timestamp: Date;
+  channel: string;
+  emotes?: string[];
+  reactions?: { [userId: string]: string };
+  mentions?: string[];
+}
+
+export interface Emote {
+  id: string;
+  code: string;
+  url: string;
+  isAnimated: boolean;
+  isUnlockable: boolean;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+}
 
 export class ChatService {
-  private io: SocketIOServer;
-  private rooms: Map<string, ChatRoom> = new Map();
-  private userRooms: Map<string, Set<string>> = new Map(); // userId -> Set of room codes
-  private messageHistory: Map<string, ChatMessage[]> = new Map(); // roomCode -> messages
-  private moderation: ChatModeration;
-  private userMessageCounts: Map<string, { count: number; resetTime: number }> = new Map();
+  private static instance: ChatService;
+  private eventEmitter: EventEmitter;
+  private messages: Map<string, ChatMessage[]>; // channel -> messages
+  private emotes: Map<string, Emote>;
+  private userEmotes: Map<string, Set<string>>; // userId -> emote ids
+  private readonly MAX_MESSAGES_PER_CHANNEL = 200;
 
-  constructor(io: SocketIOServer) {
-    this.io = io;
-    this.moderation = {
-      blockedWords: ['spam', 'hack', 'cheat', 'bot'],
-      maxMessagesPerMinute: 10,
-      muteDuration: 5,
-      autoModeration: true
-    };
-    
-    this.initializeDefaultRooms();
-    this.setupSocketHandlers();
+  constructor() {
+    this.eventEmitter = new EventEmitter();
+    this.messages = new Map();
+    this.emotes = new Map();
+    this.userEmotes = new Map();
+    this.initializeDefaultEmotes();
   }
 
-  private initializeDefaultRooms(): void {
-    const globalRoom: ChatRoom = {
-      code: 'global',
-      name: 'Global Chat',
-      type: 'global',
-      participants: [],
-      messageHistory: [],
-      settings: {
-        allowVoice: true,
-        allowEmojis: true,
-        maxMessageLength: 200,
-        moderationEnabled: true
+  private initializeDefaultEmotes() {
+    const defaultEmotes: Emote[] = [
+      {
+        id: 'smile',
+        code: ':smile:',
+        url: '/emotes/smile.png',
+        isAnimated: false,
+        isUnlockable: false,
+        rarity: 'common'
       },
-      createdAt: new Date(),
-      lastActivity: new Date()
+      {
+        id: 'wave',
+        code: ':wave:',
+        url: '/emotes/wave.png',
+        isAnimated: true,
+        isUnlockable: false,
+        rarity: 'common'
+      },
+      {
+        id: 'heart',
+        code: ':heart:',
+        url: '/emotes/heart.png',
+        isAnimated: true,
+        isUnlockable: false,
+        rarity: 'common'
+      }
+    ];
+
+    defaultEmotes.forEach(emote => {
+      this.emotes.set(emote.id, emote);
+    });
+  }
+
+  static getInstance(): ChatService {
+    if (!ChatService.instance) {
+      ChatService.instance = new ChatService();
+    }
+    return ChatService.instance;
+  }
+
+  async sendMessage(
+    senderId: string,
+    senderName: string,
+    content: string,
+    channel: string
+  ): Promise<ChatMessage> {
+    const message: ChatMessage = {
+      id: crypto.randomUUID(),
+      senderId,
+      senderName,
+      content,
+      timestamp: new Date(),
+      channel,
+      emotes: this.extractEmotes(content),
+      reactions: {},
+      mentions: this.extractMentions(content)
     };
 
-    this.rooms.set('global', globalRoom);
-    this.messageHistory.set('global', []);
+    let channelMessages = this.messages.get(channel) || [];
+    channelMessages.push(message);
+
+    // Keep only the last MAX_MESSAGES_PER_CHANNEL messages
+    if (channelMessages.length > this.MAX_MESSAGES_PER_CHANNEL) {
+      channelMessages = channelMessages.slice(-this.MAX_MESSAGES_PER_CHANNEL);
+    }
+
+    this.messages.set(channel, channelMessages);
+    this.eventEmitter.emit('newMessage', { channel, message });
+
+    return message;
   }
 
-  private setupSocketHandlers(): void {
-    this.io.on('connection', (socket: Socket) => {
-      console.log(`Chat user connected: ${socket.id}`);
+  private extractEmotes(content: string): string[] {
+    const emotes: string[] = [];
+    const emoteRegex = /:([\w-]+):/g;
+    let match;
 
-      // Join global room by default
-      this.joinRoom(socket, 'global');
+    while ((match = emoteRegex.exec(content)) !== null) {
+      const emoteCode = match[1];
+      const emote = Array.from(this.emotes.values()).find(e => e.code === `:${emoteCode}:`);
+      if (emote) {
+        emotes.push(emote.id);
+      }
+    }
 
-      socket.on('chat:send_message', (message: ChatMessage) => {
-        this.handleMessage(socket, message);
-      });
-
-      socket.on('chat:send_voice_message', (message: ChatMessage) => {
-        this.handleVoiceMessage(socket, message);
-      });
-
-      socket.on('chat:join_room', (roomCode: string) => {
-        this.joinRoom(socket, roomCode);
-      });
-
-      socket.on('chat:leave_room', (roomCode: string) => {
-        this.leaveRoom(socket, roomCode);
-      });
-
-      socket.on('chat:typing', (data: { isTyping: boolean }) => {
-        this.handleTyping(socket, data.isTyping);
-      });
-
-      socket.on('disconnect', () => {
-        this.handleDisconnect(socket);
-      });
-    });
+    return emotes;
   }
 
-  private joinRoom(socket: Socket, roomCode: string): void {
-    const room = this.rooms.get(roomCode);
-    if (!room) {
-      // Create room if it doesn't exist
-      this.createRoom(roomCode, 'Custom Room', 'room');
+  private extractMentions(content: string): string[] {
+    const mentions: string[] = [];
+    const mentionRegex = /@(\w+)/g;
+    let match;
+
+    while ((match = mentionRegex.exec(content)) !== null) {
+      mentions.push(match[1]);
     }
 
-    socket.join(roomCode);
-    
-    // Add user to room participants
-    const userId = socket.id;
-    if (!this.userRooms.has(userId)) {
-      this.userRooms.set(userId, new Set());
-    }
-    this.userRooms.get(userId)!.add(roomCode);
-
-    // Add user to room participants list
-    const room = this.rooms.get(roomCode)!;
-    if (!room.participants.includes(userId)) {
-      room.participants.push(userId);
-    }
-
-    // Send room history to user
-    const history = this.messageHistory.get(roomCode) || [];
-    socket.emit('chat:room_history', history);
-
-    // Notify others in room
-    socket.to(roomCode).emit('chat:user_joined', {
-      userId,
-      username: socket.data.username || 'Anonymous'
-    });
-
-    console.log(`User ${userId} joined room ${roomCode}`);
+    return mentions;
   }
 
-  private leaveRoom(socket: Socket, roomCode: string): void {
-    const userId = socket.id;
-    
-    socket.leave(roomCode);
-    
-    // Remove user from room participants
-    const userRooms = this.userRooms.get(userId);
-    if (userRooms) {
-      userRooms.delete(roomCode);
-    }
-
-    const room = this.rooms.get(roomCode);
-    if (room) {
-      room.participants = room.participants.filter(id => id !== userId);
-    }
-
-    // Notify others in room
-    socket.to(roomCode).emit('chat:user_left', {
-      userId,
-      username: socket.data.username || 'Anonymous'
-    });
-
-    console.log(`User ${userId} left room ${roomCode}`);
+  async getChannelMessages(channel: string, limit = 50): Promise<ChatMessage[]> {
+    const channelMessages = this.messages.get(channel) || [];
+    return channelMessages.slice(-limit);
   }
 
-  private handleMessage(socket: Socket, message: ChatMessage): void {
-    const userId = socket.id;
-    
-    // Rate limiting check
-    if (!this.checkRateLimit(userId)) {
-      socket.emit('chat:error', { message: 'Message rate limit exceeded' });
-      return;
+  async addReaction(messageId: string, userId: string, emoteId: string): Promise<boolean> {
+    for (const [channel, messages] of this.messages.entries()) {
+      const message = messages.find(m => m.id === messageId);
+      if (message) {
+        message.reactions = message.reactions || {};
+        message.reactions[userId] = emoteId;
+        this.eventEmitter.emit('messageReaction', { channel, messageId, userId, emoteId });
+        return true;
+      }
     }
-
-    // Moderation check
-    if (this.moderation.autoModeration && this.isMessageBlocked(message.message)) {
-      message.message = '[Message moderated]';
-      message.isModerated = true;
-    }
-
-    // Set proper user info
-    message.userId = userId;
-    message.username = socket.data.username || 'Anonymous';
-    message.timestamp = new Date();
-    message.roomCode = message.roomCode || 'global';
-
-    // Store message
-    this.storeMessage(message);
-
-    // Broadcast to room
-    this.io.to(message.roomCode).emit('chat:message', message);
-
-    console.log(`Message from ${message.username} in ${message.roomCode}: ${message.message}`);
+    return false;
   }
 
-  private handleVoiceMessage(socket: Socket, message: ChatMessage): void {
-    const userId = socket.id;
-    
-    // Rate limiting check
-    if (!this.checkRateLimit(userId)) {
-      socket.emit('chat:error', { message: 'Voice message rate limit exceeded' });
-      return;
+  async removeReaction(messageId: string, userId: string): Promise<boolean> {
+    for (const [channel, messages] of this.messages.entries()) {
+      const message = messages.find(m => m.id === messageId);
+      if (message && message.reactions) {
+        delete message.reactions[userId];
+        this.eventEmitter.emit('messageReactionRemoved', { channel, messageId, userId });
+        return true;
+      }
     }
-
-    // Set proper user info
-    message.userId = userId;
-    message.username = socket.data.username || 'Anonymous';
-    message.timestamp = new Date();
-    message.roomCode = message.roomCode || 'global';
-
-    // Store message
-    this.storeMessage(message);
-
-    // Broadcast to room
-    this.io.to(message.roomCode).emit('chat:voice_message', message);
-
-    console.log(`Voice message from ${message.username} in ${message.roomCode}`);
+    return false;
   }
 
-  private handleTyping(socket: Socket, isTyping: boolean): void {
-    const userId = socket.id;
-    const username = socket.data.username || 'Anonymous';
-    
-    // Get all rooms the user is in
-    const userRooms = this.userRooms.get(userId);
-    if (userRooms) {
-      userRooms.forEach(roomCode => {
-        socket.to(roomCode).emit('chat:typing', {
-          userId,
-          username,
-          isTyping
-        });
-      });
-    }
-  }
-
-  private handleDisconnect(socket: Socket): void {
-    const userId = socket.id;
-    const username = socket.data.username || 'Anonymous';
-    
-    // Leave all rooms
-    const userRooms = this.userRooms.get(userId);
-    if (userRooms) {
-      userRooms.forEach(roomCode => {
-        this.leaveRoom(socket, roomCode);
-      });
-    }
-
-    // Clean up user data
-    this.userRooms.delete(userId);
-    this.userMessageCounts.delete(userId);
-
-    console.log(`Chat user disconnected: ${username} (${userId})`);
-  }
-
-  private storeMessage(message: ChatMessage): void {
-    const roomCode = message.roomCode || 'global';
-    const history = this.messageHistory.get(roomCode) || [];
-    
-    history.push(message);
-    
-    // Keep only last 100 messages per room
-    if (history.length > 100) {
-      history.splice(0, history.length - 100);
-    }
-    
-    this.messageHistory.set(roomCode, history);
-
-    // Update room last activity
-    const room = this.rooms.get(roomCode);
-    if (room) {
-      room.lastActivity = new Date();
-    }
-  }
-
-  private checkRateLimit(userId: string): boolean {
-    const now = Date.now();
-    const userData = this.userMessageCounts.get(userId);
-    
-    if (!userData || now > userData.resetTime) {
-      // Reset or initialize
-      this.userMessageCounts.set(userId, {
-        count: 1,
-        resetTime: now + (60 * 1000) // 1 minute
-      });
-      return true;
-    }
-    
-    if (userData.count >= this.moderation.maxMessagesPerMinute) {
+  async unlockEmote(userId: string, emoteId: string): Promise<boolean> {
+    const emote = this.emotes.get(emoteId);
+    if (!emote || !emote.isUnlockable) {
       return false;
     }
     
-    userData.count++;
+    let userEmoteSet = this.userEmotes.get(userId);
+    if (!userEmoteSet) {
+      userEmoteSet = new Set();
+      this.userEmotes.set(userId, userEmoteSet);
+    }
+
+    userEmoteSet.add(emoteId);
     return true;
   }
 
-  private isMessageBlocked(message: string): boolean {
-    const lowerMessage = message.toLowerCase();
-    return this.moderation.blockedWords.some(word => lowerMessage.includes(word));
-  }
-
-  public createRoom(code: string, name: string, type: 'global' | 'room' | 'guild' | 'private'): ChatRoom {
-    const room: ChatRoom = {
-      code,
-      name,
-      type,
-      participants: [],
-      messageHistory: [],
-      settings: {
-        allowVoice: true,
-        allowEmojis: true,
-        maxMessageLength: 200,
-        moderationEnabled: true
-      },
-      createdAt: new Date(),
-      lastActivity: new Date()
-    };
-
-    this.rooms.set(code, room);
-    this.messageHistory.set(code, []);
+  async getUserEmotes(userId: string): Promise<Emote[]> {
+    const userEmoteSet = this.userEmotes.get(userId) || new Set();
+    const defaultEmotes = Array.from(this.emotes.values()).filter(e => !e.isUnlockable);
+    const unlockedEmotes = Array.from(userEmoteSet).map(id => this.emotes.get(id)!);
     
-    console.log(`Created chat room: ${name} (${code})`);
-    return room;
+    return [...defaultEmotes, ...unlockedEmotes];
   }
 
-  public getRoom(roomCode: string): ChatRoom | undefined {
-    return this.rooms.get(roomCode);
+  onNewMessage(callback: (data: { channel: string; message: ChatMessage }) => void): void {
+    this.eventEmitter.on('newMessage', callback);
   }
 
-  public getAllRooms(): ChatRoom[] {
-    return Array.from(this.rooms.values());
-  }
-
-  public getRoomHistory(roomCode: string): ChatMessage[] {
-    return this.messageHistory.get(roomCode) || [];
-  }
-
-  public getActiveUsers(): number {
-    return this.userRooms.size;
-  }
-
-  public getRoomUserCount(roomCode: string): number {
-    const room = this.rooms.get(roomCode);
-    return room ? room.participants.length : 0;
-  }
-
-  public updateModerationSettings(settings: Partial<ChatModeration>): void {
-    this.moderation = { ...this.moderation, ...settings };
-  }
-
-  public moderateMessage(messageId: string, roomCode: string): void {
-    const history = this.messageHistory.get(roomCode);
-    if (history) {
-      const message = history.find(m => m.id === messageId);
-      if (message) {
-        message.isModerated = true;
-        message.message = '[Message moderated]';
-        
-        // Notify clients
-        this.io.to(roomCode).emit('chat:message_moderated', messageId);
-      }
-    }
-  }
-
-  public getStats(): {
-    totalRooms: number;
-    totalMessages: number;
-    activeUsers: number;
-    mostActiveRoom: string;
-  } {
-    const totalMessages = Array.from(this.messageHistory.values())
-      .reduce((sum, messages) => sum + messages.length, 0);
-    
-    let mostActiveRoom = 'global';
-    let maxMessages = 0;
-    
-    this.messageHistory.forEach((messages, roomCode) => {
-      if (messages.length > maxMessages) {
-        maxMessages = messages.length;
-        mostActiveRoom = roomCode;
-      }
-    });
-
-    return {
-      totalRooms: this.rooms.size,
-      totalMessages,
-      activeUsers: this.userRooms.size,
-      mostActiveRoom
-    };
+  onMessageReaction(callback: (data: { channel: string; messageId: string; userId: string; emoteId: string }) => void): void {
+    this.eventEmitter.on('messageReaction', callback);
   }
 }
+
+export const chatService = ChatService.getInstance();
