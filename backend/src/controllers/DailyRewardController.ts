@@ -38,3 +38,5 @@ export class DailyRewardController {
 }
 
 export const dailyRewardController = new DailyRewardController();
+
+

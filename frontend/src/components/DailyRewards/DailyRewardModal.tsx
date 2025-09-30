@@ -126,3 +126,5 @@ export const DailyRewardModal: React.FC = () => {
     </div>
   );
 };
+
+
