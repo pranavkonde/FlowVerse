@@ -213,3 +213,4 @@ export const InventoryGrid: React.FC = () => {
     </DndProvider>
   );
 };
+
