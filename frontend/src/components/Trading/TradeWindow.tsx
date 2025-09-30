@@ -305,3 +305,4 @@ export const TradeWindow: React.FC<{
     </DndProvider>
   );
 };
+

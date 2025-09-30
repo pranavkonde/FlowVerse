@@ -200,3 +200,4 @@ export class TradeValidationService {
 }
 
 export const tradeValidationService = TradeValidationService.getInstance();
+

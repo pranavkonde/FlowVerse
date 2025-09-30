@@ -246,3 +246,4 @@ export class TradeMonitoringService {
 }
 
 export const tradeMonitoringService = TradeMonitoringService.getInstance();
+
