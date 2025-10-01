@@ -1,49 +1,73 @@
 export interface TradingCard {
   id: string;
-  playerId: string;
   name: string;
-  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
-  type: 'character' | 'achievement' | 'special' | 'event';
-  stats: {
-    level: number;
-    experience: number;
-    achievements: number;
-    combatRating?: number;
-    craftingLevel?: number;
-    specialAbility?: string;
-  };
-  metadata: {
-    imageUrl: string;
-    description: string;
-    issueDate: Date;
-    serialNumber: string;
-    edition: string;
-  };
-  tradeable: boolean;
-  mintCondition: number;
+  description: string;
+  rarity: CardRarity;
+  type: CardType;
+  attributes: CardAttributes;
+  imageUrl: string;
+  mintNumber: number;
+  totalMinted: number;
+  createdAt: string;
+  ownerId: string;
+}
+
+export type CardRarity =
+  | 'COMMON'
+  | 'UNCOMMON'
+  | 'RARE'
+  | 'EPIC'
+  | 'LEGENDARY'
+  | 'MYTHIC';
+
+export type CardType =
+  | 'CHARACTER'
+  | 'CREATURE'
+  | 'LOCATION'
+  | 'ARTIFACT'
+  | 'SPELL'
+  | 'EVENT';
+
+export interface CardAttributes {
+  power?: number;
+  defense?: number;
+  magic?: number;
+  speed?: number;
+  luck?: number;
+  special?: string[];
 }
 
 export interface CardCollection {
   userId: string;
   cards: TradingCard[];
-  stats: {
-    totalCards: number;
-    uniqueCards: number;
-    rarityCount: Record<string, number>;
-  };
+  stats: CollectionStats;
+  achievements: string[];
 }
 
-export const RARITY_COLORS = {
-  common: 'gray',
-  uncommon: 'green',
-  rare: 'blue',
-  epic: 'purple',
-  legendary: 'orange'
-} as const;
+export interface CollectionStats {
+  totalCards: number;
+  byRarity: Record<CardRarity, number>;
+  byType: Record<CardType, number>;
+  uniqueCards: number;
+  completeSets: number;
+}
 
-export const CARD_TYPES = {
-  character: 'Character',
-  achievement: 'Achievement',
-  special: 'Special',
-  event: 'Event'
-} as const;
+export interface CardTrade {
+  id: string;
+  initiatorId: string;
+  receiverId: string;
+  offeredCards: string[];
+  requestedCards: string[];
+  status: TradeStatus;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+}
+
+export type TradeStatus =
+  | 'PENDING'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'CANCELLED'
+  | 'EXPIRED'
+  | 'COMPLETED';

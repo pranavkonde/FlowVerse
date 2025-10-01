@@ -1,18 +1,30 @@
 import { useState, useEffect } from 'react';
-import { TradingCard, CardCollection } from '../types/tradingCards';
+import {
+  TradingCard,
+  CardCollection,
+  CardTrade,
+  TradeStatus
+} from '../types/tradingCards';
 import { api } from '../services/api';
 
 interface UseTradingCardsResult {
   collection: CardCollection | null;
+  activeTrades: CardTrade[];
   loading: boolean;
   error: string | null;
-  generateCard: (type: TradingCard['type']) => Promise<void>;
-  tradeCard: (cardId: string, toUserId: string) => Promise<void>;
+  mintCard: (templateName: string) => Promise<TradingCard>;
   refreshCollection: () => Promise<void>;
+  createTrade: (
+    receiverId: string,
+    offeredCards: string[],
+    requestedCards: string[]
+  ) => Promise<CardTrade>;
+  respondToTrade: (tradeId: string, accept: boolean) => Promise<CardTrade>;
 }
 
 export function useTradingCards(): UseTradingCardsResult {
   const [collection, setCollection] = useState<CardCollection | null>(null);
+  const [activeTrades, setActiveTrades] = useState<CardTrade[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,72 +36,135 @@ export function useTradingCards(): UseTradingCardsResult {
       setError(null);
     } catch (err) {
       setError('Failed to load card collection');
-      console.error('Error fetching card collection:', err);
+      console.error('Error fetching collection:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const generateCard = async (type: TradingCard['type']) => {
+  const fetchActiveTrades = async () => {
     try {
-      const response = await api.post('/trading-cards/generate', { type });
-      if (collection) {
-        setCollection({
-          ...collection,
-          cards: [...collection.cards, response.data],
-          stats: {
-            ...collection.stats,
-            totalCards: collection.stats.totalCards + 1,
-            rarityCount: {
-              ...collection.stats.rarityCount,
-              [response.data.rarity]: (collection.stats.rarityCount[response.data.rarity] || 0) + 1
-            }
-          }
-        });
-      }
+      const response = await api.get('/trading-cards/trades/active');
+      setActiveTrades(response.data);
     } catch (err) {
-      console.error('Error generating card:', err);
+      console.error('Error fetching active trades:', err);
+    }
+  };
+
+  const mintCard = async (templateName: string): Promise<TradingCard> => {
+    try {
+      const response = await api.post('/trading-cards/mint', { templateName });
+      const newCard = response.data;
+      
+      setCollection(current => {
+        if (!current) return null;
+        return {
+          ...current,
+          cards: [...current.cards, newCard]
+        };
+      });
+
+      return newCard;
+    } catch (err) {
+      console.error('Error minting card:', err);
       throw err;
     }
   };
 
-  const tradeCard = async (cardId: string, toUserId: string) => {
+  const createTrade = async (
+    receiverId: string,
+    offeredCards: string[],
+    requestedCards: string[]
+  ): Promise<CardTrade> => {
     try {
-      await api.post('/trading-cards/trade', { cardId, toUserId });
+      const response = await api.post('/trading-cards/trades', {
+        receiverId,
+        offeredCards,
+        requestedCards
+      });
       
-      if (collection) {
-        const tradedCard = collection.cards.find(card => card.id === cardId);
-        if (tradedCard) {
-          setCollection({
-            ...collection,
-            cards: collection.cards.filter(card => card.id !== cardId),
-            stats: {
-              ...collection.stats,
-              totalCards: collection.stats.totalCards - 1,
-              rarityCount: {
-                ...collection.stats.rarityCount,
-                [tradedCard.rarity]: collection.stats.rarityCount[tradedCard.rarity] - 1
-              }
-            }
-          });
-        }
-      }
+      const newTrade = response.data;
+      setActiveTrades(current => [...current, newTrade]);
+      
+      return newTrade;
     } catch (err) {
-      console.error('Error trading card:', err);
+      console.error('Error creating trade:', err);
+      throw err;
+    }
+  };
+
+  const respondToTrade = async (
+    tradeId: string,
+    accept: boolean
+  ): Promise<CardTrade> => {
+    try {
+      const response = await api.post('/trading-cards/trades/respond', {
+        tradeId,
+        accept
+      });
+      
+      const updatedTrade = response.data;
+      setActiveTrades(current =>
+        current.map(trade =>
+          trade.id === tradeId ? updatedTrade : trade
+        ).filter(trade => trade.status === 'PENDING')
+      );
+
+      if (updatedTrade.status === 'COMPLETED') {
+        // Refresh collection to get updated cards
+        await fetchCollection();
+      }
+      
+      return updatedTrade;
+    } catch (err) {
+      console.error('Error responding to trade:', err);
       throw err;
     }
   };
 
   useEffect(() => {
     fetchCollection();
+    fetchActiveTrades();
+
+    // Set up WebSocket listeners for real-time updates
+    const socket = api.socket;
+
+    socket.on('trade:created', ({ trade }) => {
+      setActiveTrades(current => [...current, trade]);
+    });
+
+    socket.on('trade:responded', ({ trade }) => {
+      setActiveTrades(current =>
+        current.map(t => (t.id === trade.id ? trade : t))
+          .filter(t => t.status === 'PENDING')
+      );
+
+      if (trade.status === 'COMPLETED') {
+        fetchCollection();
+      }
+    });
+
+    socket.on('trade:expired', ({ tradeId }) => {
+      setActiveTrades(current =>
+        current.filter(trade => trade.id !== tradeId)
+      );
+    });
+
+    return () => {
+      socket.off('trade:created');
+      socket.off('trade:responded');
+      socket.off('trade:expired');
+    };
   }, []);
 
   return {
     collection,
+    activeTrades,
     loading,
     error,
-    generateCard,
-    tradeCard,
-    refreshCollection: fetchCollection
+    mintCard,
+    refreshCollection: fetchCollection,
+    createTrade,
+    respondToTrade
   };
 }
