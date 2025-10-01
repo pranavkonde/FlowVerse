@@ -1,0 +1,577 @@
+.statistics-dashboard {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 1200px;
+  height: 80vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 30px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dashboard-header h2 {
+  color: white;
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.timeframe-selector {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.close-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.3s ease;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.dashboard-tabs {
+  display: flex;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dashboard-tabs button {
+  flex: 1;
+  padding: 15px 20px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-bottom: 3px solid transparent;
+}
+
+.dashboard-tabs button.active {
+  color: white;
+  border-bottom-color: #4CAF50;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dashboard-tabs button:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dashboard-content {
+  flex: 1;
+  padding: 30px;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Overview Tab */
+.overview-tab {
+  height: 100%;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  height: 100%;
+}
+
+.stat-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 25px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.stat-card h3 {
+  color: white;
+  margin: 0 0 15px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.stat-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: #4CAF50;
+  margin-bottom: 5px;
+}
+
+.stat-label {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.stat-detail {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4CAF50, #8BC34A);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* Activity Tab */
+.activity-tab {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.activity-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.summary-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 20px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.summary-card h3 {
+  color: white;
+  margin: 0 0 10px 0;
+  font-size: 16px;
+}
+
+.activity-chart {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 25px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.activity-chart h3 {
+  color: white;
+  margin: 0 0 20px 0;
+  font-size: 18px;
+}
+
+.chart-container {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  height: 200px;
+  gap: 10px;
+}
+
+.chart-bar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+.bar-fill {
+  width: 100%;
+  background: linear-gradient(to top, #4CAF50, #8BC34A);
+  border-radius: 4px 4px 0 0;
+  min-height: 10px;
+  transition: height 0.3s ease;
+}
+
+.bar-label {
+  color: white;
+  font-size: 12px;
+  margin-top: 5px;
+  font-weight: 600;
+}
+
+.bar-date {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  margin-top: 2px;
+}
+
+/* Performance Tab */
+.performance-tab {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.metric-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 25px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.metric-card h3 {
+  color: white;
+  margin: 0 0 15px 0;
+  font-size: 16px;
+}
+
+.metric-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #FF9800;
+  margin-bottom: 10px;
+}
+
+.metric-label {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+}
+
+.metric-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.metric-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #FF9800, #FFC107);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.rankings-section {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 25px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.rankings-section h3 {
+  color: white;
+  margin: 0 0 20px 0;
+  font-size: 18px;
+}
+
+.rankings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+}
+
+.ranking-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.ranking-label {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+}
+
+.ranking-value {
+  color: #4CAF50;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+/* Achievements Tab */
+.achievements-tab {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.achievement-overview {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.progress-circle {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.circle-fill {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.circle-inner {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.progress-text {
+  color: white;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.progress-total {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+}
+
+.achievement-stats {
+  display: flex;
+  gap: 30px;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-number {
+  display: block;
+  color: #4CAF50;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.stat-text {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+}
+
+.achievement-categories {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 25px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.achievement-categories h3 {
+  color: white;
+  margin: 0 0 20px 0;
+  font-size: 18px;
+}
+
+.categories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.category-card {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.category-card h4 {
+  color: white;
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  text-transform: capitalize;
+}
+
+.category-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.category-progress .progress-bar {
+  flex: 1;
+  height: 6px;
+  margin: 0;
+}
+
+.category-progress .progress-text {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  min-width: 40px;
+}
+
+.recent-achievements {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 25px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.recent-achievements h3 {
+  color: white;
+  margin: 0 0 20px 0;
+  font-size: 18px;
+}
+
+.achievement-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.achievement-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.achievement-icon {
+  font-size: 24px;
+}
+
+.achievement-info {
+  flex: 1;
+}
+
+.achievement-name {
+  color: white;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.achievement-date {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+}
+
+/* Loading and Error States */
+.loading, .error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: white;
+  font-size: 18px;
+}
+
+.error {
+  color: #ff6b6b;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .statistics-dashboard {
+    width: 95%;
+    height: 90vh;
+  }
+  
+  .dashboard-header {
+    padding: 15px 20px;
+  }
+  
+  .dashboard-content {
+    padding: 20px;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .achievement-overview {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .achievement-stats {
+    justify-content: center;
+  }
+}
