@@ -1,120 +1,80 @@
 import { Request, Response } from 'express';
-import { seasonalEventService } from '../services/SeasonalEventService';
+import { SeasonalEventService } from '../services/SeasonalEventService';
 
 export class SeasonalEventController {
-  async getCurrentSeason(req: Request, res: Response) {
-    try {
-      const season = await seasonalEventService.getCurrentSeason();
-      if (!season) {
-        return res.status(404).json({ error: 'No active season found' });
-      }
+  private eventService: SeasonalEventService;
 
-      return res.json(season);
+  constructor(eventService: SeasonalEventService) {
+    this.eventService = eventService;
+  }
+
+  public async getEventCalendar(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user.id;
+      const calendar = await this.eventService.getEventCalendar(userId);
+      res.json(calendar);
     } catch (error) {
-      console.error('Error getting current season:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch event calendar' });
     }
   }
 
-  async getUpcomingSeasons(req: Request, res: Response) {
+  public async joinEvent(req: Request, res: Response): Promise<void> {
     try {
-      const seasons = await seasonalEventService.getUpcomingSeasons();
-      return res.json(seasons);
-    } catch (error) {
-      console.error('Error getting upcoming seasons:', error);
-      return res.status(500).json({ error: 'Internal server error' });
-    }
-  }
+      const userId = req.user.id;
+      const { eventId } = req.body;
 
-  async getSeasonEvents(req: Request, res: Response) {
-    try {
-      const { seasonId } = req.params;
-      if (!seasonId) {
-        return res.status(400).json({ error: 'Season ID is required' });
-      }
-
-      const events = await seasonalEventService.getSeasonEvents(seasonId);
-      return res.json(events);
-    } catch (error) {
-      console.error('Error getting season events:', error);
-      return res.status(500).json({ error: 'Internal server error' });
-    }
-  }
-
-  async joinEvent(req: Request, res: Response) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
-      const { eventId } = req.params;
       if (!eventId) {
-        return res.status(400).json({ error: 'Event ID is required' });
+        res.status(400).json({ error: 'Event ID is required' });
+        return;
       }
 
-      const success = await seasonalEventService.joinEvent(eventId, userId);
-      if (!success) {
-        return res.status(400).json({ error: 'Failed to join event' });
-      }
-
-      return res.json({ success: true });
+      const progress = await this.eventService.joinEvent(userId, eventId);
+      res.json(progress);
     } catch (error) {
-      console.error('Error joining event:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to join event' });
     }
   }
 
-  async updateEventProgress(req: Request, res: Response) {
+  public async updateProgress(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const userId = req.user.id;
+      const { eventId, requirementType, amount } = req.body;
+
+      if (!eventId || !requirementType || typeof amount !== 'number') {
+        res.status(400).json({ error: 'Invalid progress update parameters' });
+        return;
       }
 
-      const { eventId } = req.params;
-      const { objectiveType, progress } = req.body;
-      if (!eventId || !objectiveType || typeof progress !== 'number') {
-        return res.status(400).json({ error: 'Invalid request parameters' });
-      }
-
-      const success = await seasonalEventService.updateEventProgress(
-        eventId,
+      const progress = await this.eventService.updateProgress(
         userId,
-        objectiveType,
-        progress
+        eventId,
+        requirementType,
+        amount
       );
-
-      if (!success) {
-        return res.status(400).json({ error: 'Failed to update progress' });
-      }
-
-      return res.json({ success: true });
+      res.json(progress);
     } catch (error) {
-      console.error('Error updating event progress:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to update event progress' });
     }
   }
 
-  async getEventProgress(req: Request, res: Response) {
+  public async claimReward(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const userId = req.user.id;
+      const { eventId, rewardIndex } = req.body;
+
+      if (!eventId || typeof rewardIndex !== 'number') {
+        res.status(400).json({ error: 'Invalid reward claim parameters' });
+        return;
       }
 
-      const { eventId } = req.params;
-      if (!eventId) {
-        return res.status(400).json({ error: 'Event ID is required' });
-      }
-
-      const progress = await seasonalEventService.getEventProgress(eventId, userId);
-      return res.json(progress);
+      const progress = await this.eventService.claimReward(
+        userId,
+        eventId,
+        rewardIndex
+      );
+      res.json(progress);
     } catch (error) {
-      console.error('Error getting event progress:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to claim reward' });
     }
   }
 }
-
-export const seasonalEventController = new SeasonalEventController();

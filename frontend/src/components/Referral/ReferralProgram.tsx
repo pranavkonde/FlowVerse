@@ -1,336 +1,263 @@
 import React, { useState } from 'react';
-import { ReferralCode, ReferralStats, REWARD_TYPES, STATUS_COLORS } from '../../types/referral';
 import { useReferral } from '../../hooks/useReferral';
+import { ReferralCode, ReferralTier } from '../../types/referral';
 
-export const ReferralProgram: React.FC = () => {
-  const [showCreateModal, setShowCreateModal] = useState(false);
+export function ReferralProgram() {
   const {
-    codes,
+    program,
     stats,
+    codes,
     loading,
     error,
-    createCode,
-    useCode,
-    claimRewards
+    generateCode,
+    useCode
   } = useReferral();
 
+  const [referralCode, setReferralCode] = useState('');
+  const [showNewCodeForm, setShowNewCodeForm] = useState(false);
+  const [expiresIn, setExpiresIn] = useState<number>(24);
+  const [maxUses, setMaxUses] = useState<number>(10);
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center p-4">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <div className="p-4">Loading referral program...</div>;
   }
 
   if (error) {
-    return (
-      <div className="p-4 text-red-500">
-        Error loading referral program: {error}
-      </div>
-    );
+    return <div className="p-4 text-red-500">{error}</div>;
   }
 
-  return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-white">Referral Program</h2>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark"
-        >
-          Create Referral Code
-        </button>
-      </div>
+  if (!program || !stats) {
+    return <div className="p-4">No referral program data available</div>;
+  }
 
-      {stats && <ReferralStats stats={stats} />}
-
-      <div className="mt-8">
-        <h3 className="text-xl font-semibold text-white mb-4">Your Referral Codes</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {codes.map((code) => (
-            <ReferralCodeCard
-              key={code.id}
-              code={code}
-              onClaim={(useId, type) => claimRewards(useId, type)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {showCreateModal && (
-        <CreateCodeModal
-          onClose={() => setShowCreateModal(false)}
-          onCreate={createCode}
-        />
-      )}
-    </div>
-  );
-};
-
-const ReferralStats: React.FC<{ stats: ReferralStats }> = ({ stats }) => {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div className="bg-gray-700 rounded-lg p-4">
-        <h4 className="text-lg font-semibold text-white mb-2">Referral Activity</h4>
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <span className="text-gray-300">Total Referrals:</span>
-            <span className="text-white">{stats.totalReferrals}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-300">Active Referrals:</span>
-            <span className="text-white">{stats.activeReferrals}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-300">Referral Streak:</span>
-            <span className="text-white">{stats.referralStreak} days</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-gray-700 rounded-lg p-4">
-        <h4 className="text-lg font-semibold text-white mb-2">Rewards Earned</h4>
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <span className="text-gray-300">Tokens:</span>
-            <span className="text-white">{stats.totalRewardsEarned.tokens}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-300">Experience:</span>
-            <span className="text-white">{stats.totalRewardsEarned.experience}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-300">Items:</span>
-            <span className="text-white">
-              {Object.keys(stats.totalRewardsEarned.items).length} types
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-gray-700 rounded-lg p-4">
-        <h4 className="text-lg font-semibold text-white mb-2">Last Activity</h4>
-        <div className="space-y-2">
-          {stats.lastReferralAt ? (
-            <>
-              <div className="text-gray-300">Last Referral:</div>
-              <div className="text-white">
-                {new Date(stats.lastReferralAt).toLocaleDateString()}
-              </div>
-            </>
-          ) : (
-            <div className="text-gray-300">No referrals yet</div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ReferralCodeCard: React.FC<{
-  code: ReferralCode;
-  onClaim: (useId: string, type: 'referrer' | 'referee') => Promise<void>;
-}> = ({ code, onClaim }) => {
-  const [copied, setCopied] = useState(false);
-
-  const copyCode = () => {
-    navigator.clipboard.writeText(code.code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="bg-gray-700 rounded-lg p-4">
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <h4 className="text-lg font-semibold text-white">{code.code}</h4>
-          {code.metadata.campaign && (
-            <span className="text-sm text-gray-400">{code.metadata.campaign}</span>
-          )}
-        </div>
-        <button
-          onClick={copyCode}
-          className="text-primary hover:text-primary-light"
-        >
-          {copied ? '✓ Copied' : 'Copy'}
-        </button>
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-300">Uses:</span>
-          <span className="text-white">{code.uses} / {code.maxUses}</span>
-        </div>
-
-        {code.expiresAt && (
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-300">Expires:</span>
-            <span className="text-white">
-              {new Date(code.expiresAt).toLocaleDateString()}
-            </span>
-          </div>
-        )}
-
-        <div className="border-t border-gray-600 pt-3">
-          <div className="text-sm font-semibold text-white mb-2">Rewards:</div>
-          <div className="grid grid-cols-2 gap-4">
-            <RewardsList title="You Get" rewards={code.rewards.referrer} />
-            <RewardsList title="Friend Gets" rewards={code.rewards.referee} />
-          </div>
-        </div>
-
-        {code.metadata.customMessage && (
-          <div className="mt-3 text-sm text-gray-300 italic">
-            "{code.metadata.customMessage}"
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const RewardsList: React.FC<{
-  title: string;
-  rewards: ReferralCode['rewards']['referrer'];
-}> = ({ title, rewards }) => {
-  return (
-    <div>
-      <div className="text-sm text-gray-400 mb-1">{title}</div>
-      <ul className="space-y-1">
-        <li className="text-sm">
-          <span className="text-yellow-400">{REWARD_TYPES.tokens.icon}</span>
-          <span className="text-white ml-2">{rewards.tokens}</span>
-        </li>
-        <li className="text-sm">
-          <span className="text-blue-400">{REWARD_TYPES.experience.icon}</span>
-          <span className="text-white ml-2">{rewards.experience}</span>
-        </li>
-        {rewards.items.map((item, index) => (
-          <li key={index} className="text-sm">
-            <span className="text-green-400">{REWARD_TYPES.items.icon}</span>
-            <span className="text-white ml-2">{item}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-};
-
-const CreateCodeModal: React.FC<{
-  onClose: () => void;
-  onCreate: (options: {
-    maxUses?: number;
-    expiresIn?: number;
-    campaign?: string;
-    customMessage?: string;
-  }) => Promise<void>;
-}> = ({ onClose, onCreate }) => {
-  const [maxUses, setMaxUses] = useState(10);
-  const [expiresIn, setExpiresIn] = useState(30); // days
-  const [campaign, setCampaign] = useState('');
-  const [customMessage, setCustomMessage] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleCreate = async () => {
-    setLoading(true);
+  const handleGenerateCode = async () => {
     try {
-      await onCreate({
-        maxUses,
-        expiresIn: expiresIn * 24 * 60 * 60 * 1000, // convert days to milliseconds
-        campaign: campaign || undefined,
-        customMessage: customMessage || undefined
-      });
-      onClose();
-    } catch (error) {
-      console.error('Failed to create code:', error);
-    } finally {
-      setLoading(false);
+      await generateCode({ expiresIn, maxUses });
+      setShowNewCodeForm(false);
+    } catch (err) {
+      console.error('Failed to generate code:', err);
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full">
-        <div className="flex justify-between items-start mb-4">
-          <h3 className="text-xl font-bold text-white">Create Referral Code</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white"
-          >
-            ✕
-          </button>
+  const handleUseCode = async () => {
+    try {
+      await useCode(referralCode);
+      setReferralCode('');
+      alert('Referral code used successfully!');
+    } catch (err) {
+      alert('Failed to use referral code');
+    }
+  };
+
+  const renderTierProgress = (tier: ReferralTier) => {
+    const isCurrentTier = program.currentTier === tier.level;
+    const isCompleted = program.currentTier > tier.level;
+    const progress = isCompleted
+      ? 100
+      : isCurrentTier
+      ? program.nextTierProgress
+      : 0;
+
+    return (
+      <div
+        key={tier.level}
+        className={`
+          bg-gray-700 rounded-lg p-4 relative
+          ${isCurrentTier ? 'ring-2 ring-blue-500' : ''}
+          ${isCompleted ? 'bg-gray-600' : ''}
+        `}
+      >
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-lg font-semibold text-white">
+            {tier.name}
+          </h3>
+          <span className="text-sm text-gray-300">
+            Level {tier.level}
+          </span>
         </div>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Maximum Uses
-            </label>
-            <input
-              type="number"
-              value={maxUses}
-              onChange={(e) => setMaxUses(parseInt(e.target.value))}
-              min="1"
-              className="w-full bg-gray-700 text-white rounded px-3 py-2"
+        <div className="space-y-2">
+          <div className="text-sm text-gray-300">
+            Required Referrals: {tier.requiredReferrals}
+          </div>
+
+          <div className="w-full bg-gray-600 rounded-full h-2">
+            <div
+              className="bg-blue-500 rounded-full h-2 transition-all duration-300"
+              style={{ width: `${progress}%` }}
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Expires After (days)
-            </label>
-            <input
-              type="number"
-              value={expiresIn}
-              onChange={(e) => setExpiresIn(parseInt(e.target.value))}
-              min="1"
-              className="w-full bg-gray-700 text-white rounded px-3 py-2"
-            />
+          <div className="space-y-1">
+            <div className="text-sm font-semibold text-white">Rewards:</div>
+            {tier.rewards.map((reward, index) => (
+              <div key={index} className="text-sm text-gray-300">
+                • {reward.amount}x {reward.description}
+              </div>
+            ))}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Campaign Name (optional)
-            </label>
-            <input
-              type="text"
-              value={campaign}
-              onChange={(e) => setCampaign(e.target.value)}
-              className="w-full bg-gray-700 text-white rounded px-3 py-2"
-              placeholder="e.g., Summer2023"
-            />
+          <div className="space-y-1">
+            <div className="text-sm font-semibold text-white">Special Perks:</div>
+            {tier.specialPerks.map((perk, index) => (
+              <div key={index} className="text-sm text-gray-300">
+                • {perk}
+              </div>
+            ))}
           </div>
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Custom Message (optional)
-            </label>
-            <textarea
-              value={customMessage}
-              onChange={(e) => setCustomMessage(e.target.value)}
-              className="w-full bg-gray-700 text-white rounded px-3 py-2"
-              placeholder="Add a personal message for your friends"
-              rows={3}
-            />
+        {isCompleted && (
+          <div className="absolute top-2 right-2">
+            <span className="text-green-500">✓ Completed</span>
           </div>
+        )}
+      </div>
+    );
+  };
 
-          <div className="flex justify-end space-x-3 mt-6">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-300 hover:text-white"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleCreate}
-              disabled={loading}
-              className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark disabled:opacity-50"
-            >
-              {loading ? 'Creating...' : 'Create Code'}
-            </button>
+  const renderStats = () => (
+    <div className="bg-gray-800 rounded-lg p-4 mb-6">
+      <h2 className="text-xl font-bold text-white mb-4">Your Referral Stats</h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-white">
+            {stats.totalReferrals}
           </div>
+          <div className="text-sm text-gray-400">Total Referrals</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-bold text-white">
+            {stats.activeReferrals}
+          </div>
+          <div className="text-sm text-gray-400">Active Referrals</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-bold text-white">
+            {stats.referralChain}
+          </div>
+          <div className="text-sm text-gray-400">Referral Chain</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-bold text-white">
+            {stats.specialAchievements.length}
+          </div>
+          <div className="text-sm text-gray-400">Achievements</div>
         </div>
       </div>
     </div>
   );
-};
+
+  const renderCodes = () => (
+    <div className="bg-gray-800 rounded-lg p-4 mb-6">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold text-white">Your Referral Codes</h2>
+        <button
+          onClick={() => setShowNewCodeForm(!showNewCodeForm)}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          {showNewCodeForm ? 'Cancel' : 'Generate New Code'}
+        </button>
+      </div>
+
+      {showNewCodeForm && (
+        <div className="bg-gray-700 rounded-lg p-4 mb-4">
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Expires In (hours)
+              </label>
+              <input
+                type="number"
+                value={expiresIn}
+                onChange={e => setExpiresIn(parseInt(e.target.value))}
+                className="w-full bg-gray-600 text-white rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Max Uses
+              </label>
+              <input
+                type="number"
+                value={maxUses}
+                onChange={e => setMaxUses(parseInt(e.target.value))}
+                className="w-full bg-gray-600 text-white rounded px-3 py-2"
+              />
+            </div>
+          </div>
+          <button
+            onClick={handleGenerateCode}
+            className="w-full py-2 bg-green-500 text-white rounded hover:bg-green-600"
+          >
+            Generate Code
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {codes.map(code => (
+          <div
+            key={code.id}
+            className="bg-gray-700 rounded-lg p-4"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <div className="text-xl font-mono text-white">{code.code}</div>
+              <div className={`
+                px-2 py-1 rounded text-sm
+                ${code.status === 'ACTIVE' ? 'bg-green-500' : 'bg-red-500'}
+              `}>
+                {code.status}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm text-gray-300">
+              <div>Uses: {code.currentUses}/{code.maxUses || '∞'}</div>
+              {code.expiresAt && (
+                <div>
+                  Expires: {new Date(code.expiresAt).toLocaleDateString()}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderUseCode = () => (
+    <div className="bg-gray-800 rounded-lg p-4">
+      <h2 className="text-xl font-bold text-white mb-4">Use a Referral Code</h2>
+      <div className="flex space-x-4">
+        <input
+          type="text"
+          value={referralCode}
+          onChange={e => setReferralCode(e.target.value.toUpperCase())}
+          placeholder="Enter referral code"
+          className="flex-1 bg-gray-700 text-white rounded px-4 py-2"
+        />
+        <button
+          onClick={handleUseCode}
+          disabled={!referralCode}
+          className="px-6 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+        >
+          Use Code
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="p-4 space-y-6">
+      {renderStats()}
+      {renderCodes()}
+      {renderUseCode()}
+
+      <div className="bg-gray-800 rounded-lg p-4">
+        <h2 className="text-xl font-bold text-white mb-4">Referral Tiers</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {program.tiers.map(renderTierProgress)}
+        </div>
+      </div>
+    </div>
+  );
+}

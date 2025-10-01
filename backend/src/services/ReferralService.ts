@@ -1,330 +1,379 @@
 import { EventEmitter } from 'events';
-import { DailyRewardService } from './DailyRewardService';
-import { SocialService } from './SocialService';
-import { LeaderboardService } from './LeaderboardService';
-
-export interface ReferralCode {
-  id: string;
-  code: string;
-  ownerId: string;
-  uses: number;
-  maxUses: number;
-  expiresAt?: Date;
-  rewards: {
-    referrer: ReferralReward;
-    referee: ReferralReward;
-  };
-  metadata: {
-    campaign?: string;
-    source?: string;
-    customMessage?: string;
-  };
-}
-
-export interface ReferralReward {
-  tokens: number;
-  items: string[];
-  experience: number;
-  specialRewards?: {
-    type: string;
-    id: string;
-    quantity: number;
-  }[];
-}
-
-export interface ReferralUse {
-  id: string;
-  codeId: string;
-  referrerId: string;
-  refereeId: string;
-  usedAt: Date;
-  rewardsClaimed: {
-    referrer: boolean;
-    referee: boolean;
-  };
-  status: 'pending' | 'completed' | 'expired';
-}
-
-export interface ReferralStats {
-  totalReferrals: number;
-  activeReferrals: number;
-  totalRewardsEarned: {
-    tokens: number;
-    items: Record<string, number>;
-    experience: number;
-  };
-  referralStreak: number;
-  lastReferralAt?: Date;
-}
+import {
+  ReferralCode,
+  ReferralUse,
+  ReferralStats,
+  ReferralProgram,
+  ReferralTier,
+  ReferralReward,
+  RewardType
+} from '../types/referral';
 
 export class ReferralService extends EventEmitter {
-  private static instance: ReferralService;
   private referralCodes: Map<string, ReferralCode> = new Map();
   private referralUses: Map<string, ReferralUse> = new Map();
   private userStats: Map<string, ReferralStats> = new Map();
-  private codesByOwner: Map<string, Set<string>> = new Map();
+  private tiers: ReferralTier[];
 
-  private constructor(
-    private dailyRewardService: DailyRewardService,
-    private socialService: SocialService,
-    private leaderboardService: LeaderboardService
-  ) {
+  constructor() {
     super();
+    this.initializeTiers();
+    this.startExpiryChecker();
   }
 
-  static getInstance(
-    dailyRewardService: DailyRewardService,
-    socialService: SocialService,
-    leaderboardService: LeaderboardService
-  ): ReferralService {
-    if (!ReferralService.instance) {
-      ReferralService.instance = new ReferralService(
-        dailyRewardService,
-        socialService,
-        leaderboardService
-      );
-    }
-    return ReferralService.instance;
+  private initializeTiers(): void {
+    this.tiers = [
+      {
+        level: 1,
+        name: 'Bronze Referrer',
+        requiredReferrals: 0,
+        rewards: [
+          {
+            type: 'CURRENCY',
+            amount: 100,
+            description: 'Welcome Bonus'
+          }
+        ],
+        specialPerks: ['Basic Referral Badge']
+      },
+      {
+        level: 2,
+        name: 'Silver Referrer',
+        requiredReferrals: 5,
+        rewards: [
+          {
+            type: 'PREMIUM_CURRENCY',
+            amount: 50,
+            description: 'Silver Tier Bonus'
+          },
+          {
+            type: 'SPECIAL_TITLE',
+            amount: 1,
+            description: 'Silver Recruiter Title'
+          }
+        ],
+        specialPerks: ['Silver Referral Badge', '5% Bonus Rewards']
+      },
+      {
+        level: 3,
+        name: 'Gold Referrer',
+        requiredReferrals: 15,
+        rewards: [
+          {
+            type: 'PREMIUM_CURRENCY',
+            amount: 150,
+            description: 'Gold Tier Bonus'
+          },
+          {
+            type: 'TRADING_CARD',
+            amount: 1,
+            description: 'Exclusive Gold Tier Card'
+          }
+        ],
+        specialPerks: ['Gold Referral Badge', '10% Bonus Rewards', 'Custom Profile Frame']
+      },
+      {
+        level: 4,
+        name: 'Platinum Referrer',
+        requiredReferrals: 50,
+        rewards: [
+          {
+            type: 'PREMIUM_CURRENCY',
+            amount: 500,
+            description: 'Platinum Tier Bonus'
+          },
+          {
+            type: 'PREMIUM_TIME',
+            amount: 30,
+            description: '30 Days Premium Status'
+          }
+        ],
+        specialPerks: [
+          'Platinum Referral Badge',
+          '15% Bonus Rewards',
+          'Custom Profile Frame',
+          'Special Chat Tag'
+        ]
+      }
+    ];
   }
 
-  async createReferralCode(
-    ownerId: string,
-    options: {
+  private startExpiryChecker(): void {
+    setInterval(() => {
+      const now = new Date();
+      for (const [codeId, code] of this.referralCodes) {
+        if (
+          code.status === 'ACTIVE' &&
+          (
+            (code.expiresAt && new Date(code.expiresAt) <= now) ||
+            (code.maxUses && code.currentUses >= code.maxUses)
+          )
+        ) {
+          code.status = code.currentUses >= (code.maxUses || 0)
+            ? 'DEPLETED'
+            : 'EXPIRED';
+          this.referralCodes.set(codeId, code);
+          this.emit('referral:expired', { codeId });
+        }
+      }
+    }, 60000); // Check every minute
+  }
+
+  public async generateCode(
+    userId: string,
+    options?: {
+      expiresIn?: number; // hours
       maxUses?: number;
-      expiresIn?: number;
-      campaign?: string;
-      customMessage?: string;
-    } = {}
+    }
   ): Promise<ReferralCode> {
     const code: ReferralCode = {
-      id: crypto.randomUUID(),
+      id: `REF-${Date.now()}`,
       code: this.generateUniqueCode(),
-      ownerId,
-      uses: 0,
-      maxUses: options.maxUses || 10,
-      expiresAt: options.expiresIn ? new Date(Date.now() + options.expiresIn) : undefined,
-      rewards: {
-        referrer: {
-          tokens: 100,
-          items: ['referral_chest', 'friend_token'],
-          experience: 200,
-          specialRewards: [
-            { type: 'title', id: 'recruiter', quantity: 1 },
-            { type: 'emote', id: 'friendship', quantity: 1 }
-          ]
+      ownerId: userId,
+      createdAt: new Date().toISOString(),
+      currentUses: 0,
+      rewards: [
+        {
+          type: 'CURRENCY',
+          amount: 100,
+          description: 'Basic Referral Reward'
         },
-        referee: {
-          tokens: 150,
-          items: ['welcome_chest', 'starter_pack'],
-          experience: 300,
-          specialRewards: [
-            { type: 'title', id: 'newcomer', quantity: 1 },
-            { type: 'emote', id: 'wave', quantity: 1 }
-          ]
+        {
+          type: 'EXPERIENCE',
+          amount: 500,
+          description: 'Referral Experience Bonus'
         }
-      },
-      metadata: {
-        campaign: options.campaign,
-        customMessage: options.customMessage
-      }
+      ],
+      status: 'ACTIVE'
     };
+
+    if (options?.expiresIn) {
+      const expiryDate = new Date();
+      expiryDate.setHours(expiryDate.getHours() + options.expiresIn);
+      code.expiresAt = expiryDate.toISOString();
+    }
+
+    if (options?.maxUses) {
+      code.maxUses = options.maxUses;
+    }
 
     this.referralCodes.set(code.id, code);
-    
-    const ownerCodes = this.codesByOwner.get(ownerId) || new Set();
-    ownerCodes.add(code.id);
-    this.codesByOwner.set(ownerId, ownerCodes);
-
-    this.emit('referralCodeCreated', code);
     return code;
-  }
-
-  async useReferralCode(code: string, refereeId: string): Promise<ReferralUse> {
-    const referralCode = Array.from(this.referralCodes.values()).find(rc => rc.code === code);
-    if (!referralCode) {
-      throw new Error('Invalid referral code');
-    }
-
-    if (referralCode.ownerId === refereeId) {
-      throw new Error('Cannot use own referral code');
-    }
-
-    if (referralCode.uses >= referralCode.maxUses) {
-      throw new Error('Referral code has reached maximum uses');
-    }
-
-    if (referralCode.expiresAt && referralCode.expiresAt < new Date()) {
-      throw new Error('Referral code has expired');
-    }
-
-    // Check if user has already used a referral code
-    const existingUse = Array.from(this.referralUses.values()).find(
-      use => use.refereeId === refereeId
-    );
-    if (existingUse) {
-      throw new Error('User has already used a referral code');
-    }
-
-    const use: ReferralUse = {
-      id: crypto.randomUUID(),
-      codeId: referralCode.id,
-      referrerId: referralCode.ownerId,
-      refereeId,
-      usedAt: new Date(),
-      rewardsClaimed: {
-        referrer: false,
-        referee: false
-      },
-      status: 'pending'
-    };
-
-    referralCode.uses++;
-    this.referralCodes.set(referralCode.id, referralCode);
-    this.referralUses.set(use.id, use);
-
-    this.updateStats(referralCode.ownerId, 'referral');
-    this.emit('referralCodeUsed', { use, code: referralCode });
-
-    return use;
-  }
-
-  async claimReferralRewards(useId: string, claimerType: 'referrer' | 'referee'): Promise<boolean> {
-    const use = this.referralUses.get(useId);
-    if (!use || use.status !== 'pending') {
-      return false;
-    }
-
-    const code = this.referralCodes.get(use.codeId);
-    if (!code) {
-      return false;
-    }
-
-    const userId = claimerType === 'referrer' ? use.referrerId : use.refereeId;
-    const rewards = claimerType === 'referrer' ? code.rewards.referrer : code.rewards.referee;
-
-    if (use.rewardsClaimed[claimerType]) {
-      return false;
-    }
-
-    // Grant rewards
-    // This would integrate with your inventory and progression systems
-    this.updateStats(userId, 'reward', rewards);
-
-    use.rewardsClaimed[claimerType] = true;
-    if (use.rewardsClaimed.referrer && use.rewardsClaimed.referee) {
-      use.status = 'completed';
-    }
-
-    this.referralUses.set(use.id, use);
-    this.emit('referralRewardsClaimed', { use, claimerType, rewards });
-
-    return true;
   }
 
   private generateUniqueCode(): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code: string;
     do {
-      code = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-    } while (Array.from(this.referralCodes.values()).some(rc => rc.code === code));
+      code = Array.from(
+        { length: 8 },
+        () => chars[Math.floor(Math.random() * chars.length)]
+      ).join('');
+    } while (
+      Array.from(this.referralCodes.values()).some(rc => rc.code === code)
+    );
     return code;
   }
 
-  private updateStats(userId: string, type: 'referral' | 'reward', rewards?: ReferralReward) {
-    let stats = this.userStats.get(userId);
-    if (!stats) {
-      stats = {
-        totalReferrals: 0,
-        activeReferrals: 0,
-        totalRewardsEarned: {
-          tokens: 0,
-          items: {},
-          experience: 0
-        },
-        referralStreak: 0
-      };
+  public async useCode(
+    referredId: string,
+    code: string
+  ): Promise<ReferralUse> {
+    const referralCode = Array.from(this.referralCodes.values()).find(
+      rc => rc.code === code && rc.status === 'ACTIVE'
+    );
+
+    if (!referralCode) {
+      throw new Error('Invalid or expired referral code');
     }
 
-    if (type === 'referral') {
-      stats.totalReferrals++;
-      stats.activeReferrals++;
-      
-      const now = new Date();
-      if (stats.lastReferralAt) {
-        const daysSinceLastReferral = Math.floor(
-          (now.getTime() - stats.lastReferralAt.getTime()) / (24 * 60 * 60 * 1000)
-        );
-        if (daysSinceLastReferral <= 1) {
-          stats.referralStreak++;
-        } else {
-          stats.referralStreak = 1;
-        }
-      } else {
-        stats.referralStreak = 1;
-      }
-      stats.lastReferralAt = now;
+    if (referralCode.ownerId === referredId) {
+      throw new Error('Cannot use your own referral code');
     }
 
-    if (type === 'reward' && rewards) {
-      stats.totalRewardsEarned.tokens += rewards.tokens;
-      stats.totalRewardsEarned.experience += rewards.experience;
-      
-      rewards.items.forEach(item => {
-        stats.totalRewardsEarned.items[item] = (stats.totalRewardsEarned.items[item] || 0) + 1;
-      });
+    const existingUse = Array.from(this.referralUses.values()).find(
+      use => use.referredId === referredId
+    );
+
+    if (existingUse) {
+      throw new Error('Already used a referral code');
     }
+
+    const use: ReferralUse = {
+      id: `USE-${Date.now()}`,
+      referralId: referralCode.id,
+      referrerId: referralCode.ownerId,
+      referredId,
+      usedAt: new Date().toISOString(),
+      rewardsClaimed: false
+    };
+
+    referralCode.currentUses++;
+    if (
+      referralCode.maxUses &&
+      referralCode.currentUses >= referralCode.maxUses
+    ) {
+      referralCode.status = 'DEPLETED';
+    }
+
+    this.referralCodes.set(referralCode.id, referralCode);
+    this.referralUses.set(use.id, use);
+    this.updateStats(referralCode.ownerId);
+
+    this.emit('referral:used', {
+      referralId: referralCode.id,
+      referrerId: referralCode.ownerId,
+      referredId
+    });
+
+    return use;
+  }
+
+  public async claimRewards(useId: string): Promise<ReferralUse> {
+    const use = this.referralUses.get(useId);
+    if (!use) {
+      throw new Error('Referral use not found');
+    }
+
+    if (use.rewardsClaimed) {
+      throw new Error('Rewards already claimed');
+    }
+
+    const referralCode = this.referralCodes.get(use.referralId);
+    if (!referralCode) {
+      throw new Error('Referral code not found');
+    }
+
+    use.rewardsClaimed = true;
+    use.claimedAt = new Date().toISOString();
+    this.referralUses.set(use.id, use);
+
+    this.emit('rewards:claimed', {
+      useId,
+      referrerId: use.referrerId,
+      referredId: use.referredId,
+      rewards: referralCode.rewards
+    });
+
+    return use;
+  }
+
+  private updateStats(userId: string): void {
+    const uses = Array.from(this.referralUses.values()).filter(
+      use => use.referrerId === userId
+    );
+
+    const stats: ReferralStats = {
+      totalReferrals: uses.length,
+      activeReferrals: uses.filter(use => !use.rewardsClaimed).length,
+      totalRewardsEarned: this.calculateTotalRewards(uses),
+      referralChain: this.calculateReferralChain(userId),
+      specialAchievements: this.calculateAchievements(uses.length)
+    };
 
     this.userStats.set(userId, stats);
-    this.emit('statsUpdated', { userId, stats });
-
-    // Update leaderboard
-    this.leaderboardService.updatePlayerScore(userId, stats.totalReferrals, 'referrals');
   }
 
-  async getReferralCode(codeId: string): Promise<ReferralCode | null> {
-    return this.referralCodes.get(codeId) || null;
+  private calculateTotalRewards(uses: ReferralUse[]): { type: RewardType; amount: number }[] {
+    const rewardTotals = new Map<RewardType, number>();
+
+    uses.forEach(use => {
+      const code = this.referralCodes.get(use.referralId);
+      if (!code) return;
+
+      code.rewards.forEach(reward => {
+        const current = rewardTotals.get(reward.type) || 0;
+        rewardTotals.set(reward.type, current + reward.amount);
+      });
+    });
+
+    return Array.from(rewardTotals.entries()).map(([type, amount]) => ({
+      type,
+      amount
+    }));
   }
 
-  async getUserCodes(userId: string): Promise<ReferralCode[]> {
-    const codeIds = this.codesByOwner.get(userId) || new Set();
-    return Array.from(codeIds)
-      .map(id => this.referralCodes.get(id))
-      .filter((code): code is ReferralCode => code !== undefined);
+  private calculateReferralChain(userId: string): number {
+    const visited = new Set<string>();
+    const traverse = (id: string): number => {
+      if (visited.has(id)) return 0;
+      visited.add(id);
+
+      const directReferrals = Array.from(this.referralUses.values())
+        .filter(use => use.referrerId === id)
+        .map(use => use.referredId);
+
+      if (directReferrals.length === 0) return 1;
+
+      return 1 + Math.max(
+        ...directReferrals.map(referredId => traverse(referredId))
+      );
+    };
+
+    return traverse(userId);
   }
 
-  async getReferralUse(useId: string): Promise<ReferralUse | null> {
-    return this.referralUses.get(useId) || null;
+  private calculateAchievements(totalReferrals: number): string[] {
+    const achievements: string[] = [];
+
+    if (totalReferrals >= 1) achievements.push('First Referral');
+    if (totalReferrals >= 5) achievements.push('Growing Network');
+    if (totalReferrals >= 10) achievements.push('Referral Expert');
+    if (totalReferrals >= 25) achievements.push('Master Recruiter');
+    if (totalReferrals >= 50) achievements.push('Legendary Referrer');
+
+    return achievements;
   }
 
-  async getUserStats(userId: string): Promise<ReferralStats | null> {
-    return this.userStats.get(userId) || null;
+  public async getReferralProgram(userId: string): Promise<ReferralProgram> {
+    const stats = this.userStats.get(userId) || {
+      totalReferrals: 0,
+      activeReferrals: 0,
+      totalRewardsEarned: [],
+      referralChain: 0,
+      specialAchievements: []
+    };
+
+    const currentTier = this.tiers.reduce((highest, tier) =>
+      stats.totalReferrals >= tier.requiredReferrals ? tier.level : highest,
+      1
+    );
+
+    const nextTier = this.tiers.find(tier => tier.level === currentTier + 1);
+    const nextTierProgress = nextTier
+      ? (stats.totalReferrals / nextTier.requiredReferrals) * 100
+      : 100;
+
+    return {
+      tiers: this.tiers,
+      currentTier,
+      nextTierProgress,
+      totalReferrals: stats.totalReferrals,
+      availableRewards: this.getAvailableRewards(currentTier)
+    };
   }
 
-  onReferralCodeCreated(callback: (code: ReferralCode) => void) {
-    this.on('referralCodeCreated', callback);
+  private getAvailableRewards(currentTier: number): ReferralReward[] {
+    return this.tiers
+      .filter(tier => tier.level <= currentTier)
+      .flatMap(tier => tier.rewards);
   }
 
-  onReferralCodeUsed(callback: (data: { use: ReferralUse; code: ReferralCode }) => void) {
-    this.on('referralCodeUsed', callback);
+  public async getUserStats(userId: string): Promise<ReferralStats> {
+    return (
+      this.userStats.get(userId) || {
+        totalReferrals: 0,
+        activeReferrals: 0,
+        totalRewardsEarned: [],
+        referralChain: 0,
+        specialAchievements: []
+      }
+    );
   }
 
-  onReferralRewardsClaimed(
-    callback: (data: {
-      use: ReferralUse;
-      claimerType: 'referrer' | 'referee';
-      rewards: ReferralReward;
-    }) => void
-  ) {
-    this.on('referralRewardsClaimed', callback);
-  }
-
-  onStatsUpdated(callback: (data: { userId: string; stats: ReferralStats }) => void) {
-    this.on('statsUpdated', callback);
+  public async getUserCodes(userId: string): Promise<ReferralCode[]> {
+    return Array.from(this.referralCodes.values()).filter(
+      code => code.ownerId === userId
+    );
   }
 }
-
-export const referralService = ReferralService.getInstance(
-  new DailyRewardService(),
-  new SocialService(),
-  new LeaderboardService()
-);

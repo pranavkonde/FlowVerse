@@ -1,123 +1,88 @@
 import { Request, Response } from 'express';
-import { referralService } from '../services/ReferralService';
+import { ReferralService } from '../services/ReferralService';
 
 export class ReferralController {
-  async createReferralCode(req: Request, res: Response) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
+  private referralService: ReferralService;
 
-      const { maxUses, expiresIn, campaign, customMessage } = req.body;
-      const code = await referralService.createReferralCode(userId, {
-        maxUses,
+  constructor(referralService: ReferralService) {
+    this.referralService = referralService;
+  }
+
+  public async generateCode(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user.id;
+      const { expiresIn, maxUses } = req.body;
+
+      const code = await this.referralService.generateCode(userId, {
         expiresIn,
-        campaign,
-        customMessage
+        maxUses
       });
-
-      return res.json(code);
+      res.json(code);
     } catch (error) {
-      console.error('Error creating referral code:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to generate referral code' });
     }
   }
 
-  async useReferralCode(req: Request, res: Response) {
+  public async useCode(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
+      const userId = req.user.id;
       const { code } = req.body;
+
       if (!code) {
-        return res.status(400).json({ error: 'Referral code is required' });
+        res.status(400).json({ error: 'Referral code is required' });
+        return;
       }
 
-      try {
-        const use = await referralService.useReferralCode(code, userId);
-        return res.json(use);
-      } catch (err) {
-        return res.status(400).json({ error: err.message });
-      }
+      const use = await this.referralService.useCode(userId, code);
+      res.json(use);
     } catch (error) {
-      console.error('Error using referral code:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to use referral code' });
     }
   }
 
-  async claimReferralRewards(req: Request, res: Response) {
+  public async claimRewards(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const { useId } = req.body;
+
+      if (!useId) {
+        res.status(400).json({ error: 'Use ID is required' });
+        return;
       }
 
-      const { useId, claimerType } = req.body;
-      if (!useId || !claimerType) {
-        return res.status(400).json({ error: 'Use ID and claimer type are required' });
-      }
-
-      const use = await referralService.getReferralUse(useId);
-      if (!use) {
-        return res.status(404).json({ error: 'Referral use not found' });
-      }
-
-      // Verify the user is either the referrer or referee
-      if (
-        (claimerType === 'referrer' && use.referrerId !== userId) ||
-        (claimerType === 'referee' && use.refereeId !== userId)
-      ) {
-        return res.status(403).json({ error: 'Not authorized to claim these rewards' });
-      }
-
-      const success = await referralService.claimReferralRewards(useId, claimerType);
-      if (!success) {
-        return res.status(400).json({ error: 'Failed to claim rewards' });
-      }
-
-      return res.json({ success: true });
+      const use = await this.referralService.claimRewards(useId);
+      res.json(use);
     } catch (error) {
-      console.error('Error claiming referral rewards:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to claim rewards' });
     }
   }
 
-  async getUserCodes(req: Request, res: Response) {
+  public async getReferralProgram(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
-      const codes = await referralService.getUserCodes(userId);
-      return res.json(codes);
+      const userId = req.user.id;
+      const program = await this.referralService.getReferralProgram(userId);
+      res.json(program);
     } catch (error) {
-      console.error('Error getting user codes:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch referral program' });
     }
   }
 
-  async getReferralStats(req: Request, res: Response) {
+  public async getUserStats(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
-      const stats = await referralService.getUserStats(userId);
-      if (!stats) {
-        return res.status(404).json({ error: 'Stats not found' });
-      }
-
-      return res.json(stats);
+      const userId = req.user.id;
+      const stats = await this.referralService.getUserStats(userId);
+      res.json(stats);
     } catch (error) {
-      console.error('Error getting referral stats:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch referral stats' });
+    }
+  }
+
+  public async getUserCodes(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user.id;
+      const codes = await this.referralService.getUserCodes(userId);
+      res.json(codes);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch user codes' });
     }
   }
 }
-
-export const referralController = new ReferralController();

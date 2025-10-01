@@ -1,121 +1,161 @@
 import { useState, useEffect } from 'react';
-import { ReferralCode, ReferralStats } from '../types/referral';
+import {
+  ReferralCode,
+  ReferralProgram,
+  ReferralStats,
+  ReferralUse
+} from '../types/referral';
 import { api } from '../services/api';
 
 interface UseReferralResult {
-  codes: ReferralCode[];
+  program: ReferralProgram | null;
   stats: ReferralStats | null;
+  codes: ReferralCode[];
   loading: boolean;
   error: string | null;
-  createCode: (options: {
-    maxUses?: number;
+  generateCode: (options?: {
     expiresIn?: number;
-    campaign?: string;
-    customMessage?: string;
-  }) => Promise<void>;
-  useCode: (code: string) => Promise<void>;
-  claimRewards: (useId: string, type: 'referrer' | 'referee') => Promise<void>;
+    maxUses?: number;
+  }) => Promise<ReferralCode>;
+  useCode: (code: string) => Promise<ReferralUse>;
+  claimRewards: (useId: string) => Promise<ReferralUse>;
   refreshData: () => Promise<void>;
 }
 
 export function useReferral(): UseReferralResult {
-  const [codes, setCodes] = useState<ReferralCode[]>([]);
+  const [program, setProgram] = useState<ReferralProgram | null>(null);
   const [stats, setStats] = useState<ReferralStats | null>(null);
+  const [codes, setCodes] = useState<ReferralCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const fetchProgram = async () => {
     try {
-      const [codesResponse, statsResponse] = await Promise.all([
-        api.get('/referral/codes'),
-        api.get('/referral/stats')
-      ]);
-
-      setCodes(codesResponse.data);
-      setStats(statsResponse.data);
-      setError(null);
+      const response = await api.get('/referral/program');
+      setProgram(response.data);
     } catch (err) {
-      setError('Failed to load referral data');
-      console.error('Error fetching referral data:', err);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching referral program:', err);
+      setError('Failed to load referral program');
     }
   };
 
-  const createCode = async (options: {
-    maxUses?: number;
-    expiresIn?: number;
-    campaign?: string;
-    customMessage?: string;
-  }) => {
+  const fetchStats = async () => {
     try {
-      const response = await api.post('/referral/codes', options);
-      setCodes(current => [...current, response.data]);
+      const response = await api.get('/referral/stats');
+      setStats(response.data);
     } catch (err) {
-      console.error('Error creating referral code:', err);
+      console.error('Error fetching referral stats:', err);
+    }
+  };
+
+  const fetchCodes = async () => {
+    try {
+      const response = await api.get('/referral/codes');
+      setCodes(response.data);
+    } catch (err) {
+      console.error('Error fetching referral codes:', err);
+    }
+  };
+
+  const generateCode = async (options?: {
+    expiresIn?: number;
+    maxUses?: number;
+  }): Promise<ReferralCode> => {
+    try {
+      const response = await api.post('/referral/generate', options);
+      const newCode = response.data;
+      setCodes(current => [...current, newCode]);
+      return newCode;
+    } catch (err) {
+      console.error('Error generating referral code:', err);
       throw err;
     }
   };
 
-  const useCode = async (code: string) => {
+  const useCode = async (code: string): Promise<ReferralUse> => {
     try {
-      await api.post('/referral/use', { code });
-      // Refresh data to get updated stats
-      fetchData();
+      const response = await api.post('/referral/use', { code });
+      return response.data;
     } catch (err) {
       console.error('Error using referral code:', err);
       throw err;
     }
   };
 
-  const claimRewards = async (useId: string, type: 'referrer' | 'referee') => {
+  const claimRewards = async (useId: string): Promise<ReferralUse> => {
     try {
-      await api.post('/referral/claim', { useId, claimerType: type });
-      // Refresh data to get updated stats
-      fetchData();
+      const response = await api.post('/referral/claim', { useId });
+      await Promise.all([fetchStats(), fetchProgram()]);
+      return response.data;
     } catch (err) {
       console.error('Error claiming rewards:', err);
       throw err;
     }
   };
 
+  const refreshData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        fetchProgram(),
+        fetchStats(),
+        fetchCodes()
+      ]);
+      setError(null);
+    } catch (err) {
+      setError('Failed to refresh referral data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchData();
+    refreshData();
 
     // Set up WebSocket listeners for real-time updates
     const socket = api.socket;
 
-    socket.on('referralCodeCreated', (code: ReferralCode) => {
-      setCodes(current => [...current, code]);
+    socket.on('referral:used', ({ referralId }) => {
+      setCodes(current =>
+        current.map(code =>
+          code.id === referralId
+            ? { ...code, currentUses: code.currentUses + 1 }
+            : code
+        )
+      );
+      fetchStats();
     });
 
-    socket.on('referralCodeUsed', ({ code }: { code: ReferralCode }) => {
+    socket.on('referral:expired', ({ codeId }) => {
       setCodes(current =>
-        current.map(c =>
-          c.id === code.id ? code : c
+        current.map(code =>
+          code.id === codeId
+            ? { ...code, status: 'EXPIRED' }
+            : code
         )
       );
     });
 
-    socket.on('statsUpdated', ({ stats: newStats }: { stats: ReferralStats }) => {
-      setStats(newStats);
+    socket.on('rewards:claimed', () => {
+      Promise.all([fetchStats(), fetchProgram()]);
     });
 
     return () => {
-      socket.off('referralCodeCreated');
-      socket.off('referralCodeUsed');
-      socket.off('statsUpdated');
+      socket.off('referral:used');
+      socket.off('referral:expired');
+      socket.off('rewards:claimed');
     };
   }, []);
 
   return {
-    codes,
+    program,
     stats,
+    codes,
     loading,
     error,
-    createCode,
+    generateCode,
     useCode,
     claimRewards,
-    refreshData: fetchData
+    refreshData
   };
 }

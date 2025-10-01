@@ -436,8 +436,8 @@ export class SeasonalEventService {
     this.eventEmitter.on('progressUpdated', callback);
   }
 }
-
 export const seasonalEventService = SeasonalEventService.getInstance(
   new EventService(null as any), // Pass proper SocketIO instance
   new SocialService()
 );
+

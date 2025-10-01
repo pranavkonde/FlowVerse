@@ -1,216 +1,203 @@
 import { useState, useEffect } from 'react';
-import { Season, SeasonalEvent } from '../types/seasonalEvents';
+import {
+  EventCalendar,
+  EventProgress,
+  RequirementType,
+  SeasonalEvent
+} from '../types/seasonalEvents';
 import { api } from '../services/api';
 
 interface UseSeasonalEventsResult {
-  currentSeason: Season | null;
-  upcomingSeasons: Season[];
+  calendar: EventCalendar | null;
   loading: boolean;
   error: string | null;
-  joinEvent: (eventId: string) => Promise<void>;
-  updateEventProgress: (eventId: string, objectiveType: string, progress: number) => Promise<void>;
-  getEventProgress: (eventId: string) => Promise<number[]>;
-  refreshSeasons: () => Promise<void>;
+  refreshCalendar: () => Promise<void>;
+  joinEvent: (eventId: string) => Promise<EventProgress>;
+  updateProgress: (
+    eventId: string,
+    requirementType: RequirementType,
+    amount: number
+  ) => Promise<EventProgress>;
+  claimReward: (eventId: string, rewardIndex: number) => Promise<EventProgress>;
 }
 
 export function useSeasonalEvents(): UseSeasonalEventsResult {
-  const [currentSeason, setCurrentSeason] = useState<Season | null>(null);
-  const [upcomingSeasons, setUpcomingSeasons] = useState<Season[]>([]);
+  const [calendar, setCalendar] = useState<EventCalendar | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSeasons = async () => {
+  const fetchCalendar = async () => {
     try {
       setLoading(true);
-      const [currentResponse, upcomingResponse] = await Promise.all([
-        api.get('/seasonal-events/current'),
-        api.get('/seasonal-events/upcoming')
-      ]);
-
-      setCurrentSeason(currentResponse.data);
-      setUpcomingSeasons(upcomingResponse.data);
+      const response = await api.get('/seasonal-events/calendar');
+      setCalendar(response.data);
       setError(null);
     } catch (err) {
-      setError('Failed to load seasonal events');
-      console.error('Error fetching seasonal events:', err);
+      setError('Failed to load event calendar');
+      console.error('Error fetching calendar:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const joinEvent = async (eventId: string) => {
+  const joinEvent = async (eventId: string): Promise<EventProgress> => {
     try {
-      await api.post(`/seasonal-events/${eventId}/join`);
+      const response = await api.post('/seasonal-events/join', { eventId });
       
-      // Update local state to reflect participation
-      if (currentSeason) {
-        const updatedEvents = currentSeason.events.map(event =>
+      setCalendar(current => {
+        if (!current) return null;
+
+        const updatedActiveEvents = current.activeEvents.map(event =>
           event.id === eventId
-            ? {
-                ...event,
-                participants: [...event.participants, 'currentUser'] // Replace with actual user ID
-              }
+            ? { ...event, participants: [...event.participants, 'currentUser'] }
             : event
         );
 
-        setCurrentSeason({
-          ...currentSeason,
-          events: updatedEvents
-        });
-      }
+        return {
+          ...current,
+          activeEvents: updatedActiveEvents,
+          userProgress: {
+            ...current.userProgress,
+            [eventId]: response.data
+          }
+        };
+      });
+
+      return response.data;
     } catch (err) {
       console.error('Error joining event:', err);
       throw err;
     }
   };
 
-  const updateEventProgress = async (
+  const updateProgress = async (
     eventId: string,
-    objectiveType: string,
-    progress: number
-  ) => {
+    requirementType: RequirementType,
+    amount: number
+  ): Promise<EventProgress> => {
     try {
-      await api.post(`/seasonal-events/${eventId}/progress`, {
-        objectiveType,
-        progress
+      const response = await api.post('/seasonal-events/progress', {
+        eventId,
+        requirementType,
+        amount
+      });
+      
+      setCalendar(current => {
+        if (!current) return null;
+        return {
+          ...current,
+          userProgress: {
+            ...current.userProgress,
+            [eventId]: response.data
+          }
+        };
       });
 
-      // Update local state to reflect progress
-      if (currentSeason) {
-        const updatedEvents = currentSeason.events.map(event => {
-          if (event.id === eventId) {
-            const updatedObjectives = event.objectives.map(objective =>
-              objective.type === objectiveType
-                ? {
-                    ...objective,
-                    current: Math.min(objective.current + progress, objective.target),
-                    completed: objective.current + progress >= objective.target
-                  }
-                : objective
-            );
-
-            return {
-              ...event,
-              objectives: updatedObjectives
-            };
-          }
-          return event;
-        });
-
-        setCurrentSeason({
-          ...currentSeason,
-          events: updatedEvents
-        });
-      }
+      return response.data;
     } catch (err) {
-      console.error('Error updating event progress:', err);
+      console.error('Error updating progress:', err);
       throw err;
     }
   };
 
-  const getEventProgress = async (eventId: string): Promise<number[]> => {
+  const claimReward = async (
+    eventId: string,
+    rewardIndex: number
+  ): Promise<EventProgress> => {
     try {
-      const response = await api.get(`/seasonal-events/${eventId}/progress`);
+      const response = await api.post('/seasonal-events/claim', {
+        eventId,
+        rewardIndex
+      });
+      
+      setCalendar(current => {
+        if (!current) return null;
+        return {
+          ...current,
+          userProgress: {
+            ...current.userProgress,
+            [eventId]: response.data
+          }
+        };
+      });
+
       return response.data;
     } catch (err) {
-      console.error('Error getting event progress:', err);
+      console.error('Error claiming reward:', err);
       throw err;
     }
   };
 
   useEffect(() => {
-    fetchSeasons();
+    fetchCalendar();
 
     // Set up WebSocket listeners for real-time updates
     const socket = api.socket;
 
-    socket.on('seasonStarted', (season: Season) => {
-      setCurrentSeason(season);
-      setUpcomingSeasons(prev => prev.filter(s => s.id !== season.id));
+    socket.on('season:changed', () => {
+      fetchCalendar();
     });
 
-    socket.on('seasonEnded', (season: Season) => {
-      if (currentSeason?.id === season.id) {
-        setCurrentSeason(null);
-        fetchSeasons(); // Refresh to get the new current season
-      }
+    socket.on('event:started', ({ eventId }) => {
+      setCalendar(current => {
+        if (!current) return null;
+
+        const event = current.upcomingEvents.find(e => e.id === eventId);
+        if (!event) return current;
+
+        const updatedEvent = { ...event, status: 'ACTIVE' };
+        return {
+          ...current,
+          activeEvents: [...current.activeEvents, updatedEvent],
+          upcomingEvents: current.upcomingEvents.filter(e => e.id !== eventId)
+        };
+      });
     });
 
-    socket.on('eventStarted', (event: SeasonalEvent) => {
-      if (currentSeason) {
-        const updatedEvents = currentSeason.events.map(e =>
-          e.id === event.id ? event : e
-        );
-        setCurrentSeason({
-          ...currentSeason,
-          events: updatedEvents
-        });
-      }
+    socket.on('event:completed', ({ eventId }) => {
+      setCalendar(current => {
+        if (!current) return null;
+
+        const event = current.activeEvents.find(e => e.id === eventId);
+        if (!event) return current;
+
+        const updatedEvent = { ...event, status: 'COMPLETED' };
+        return {
+          ...current,
+          activeEvents: current.activeEvents.filter(e => e.id !== eventId),
+          completedEvents: [...current.completedEvents, updatedEvent]
+        };
+      });
     });
 
-    socket.on('eventEnded', (event: SeasonalEvent) => {
-      if (currentSeason) {
-        const updatedEvents = currentSeason.events.map(e =>
-          e.id === event.id ? event : e
-        );
-        setCurrentSeason({
-          ...currentSeason,
-          events: updatedEvents
-        });
-      }
-    });
-
-    socket.on('progressUpdated', (data: {
-      eventId: string;
-      objectiveType: string;
-      progress: number;
-      completed: boolean;
-    }) => {
-      if (currentSeason) {
-        const updatedEvents = currentSeason.events.map(event => {
-          if (event.id === data.eventId) {
-            const updatedObjectives = event.objectives.map(objective =>
-              objective.type === data.objectiveType
-                ? {
-                    ...objective,
-                    current: data.progress,
-                    completed: data.completed
-                  }
-                : objective
-            );
-
-            return {
-              ...event,
-              objectives: updatedObjectives
-            };
+    socket.on('progress:updated', ({ eventId, progress }) => {
+      setCalendar(current => {
+        if (!current) return null;
+        return {
+          ...current,
+          userProgress: {
+            ...current.userProgress,
+            [eventId]: progress
           }
-          return event;
-        });
-
-        setCurrentSeason({
-          ...currentSeason,
-          events: updatedEvents
-        });
-      }
+        };
+      });
     });
 
     return () => {
-      socket.off('seasonStarted');
-      socket.off('seasonEnded');
-      socket.off('eventStarted');
-      socket.off('eventEnded');
-      socket.off('progressUpdated');
+      socket.off('season:changed');
+      socket.off('event:started');
+      socket.off('event:completed');
+      socket.off('progress:updated');
     };
   }, []);
 
   return {
-    currentSeason,
-    upcomingSeasons,
+    calendar,
     loading,
     error,
+    refreshCalendar: fetchCalendar,
     joinEvent,
-    updateEventProgress,
-    getEventProgress,
-    refreshSeasons: fetchSeasons
+    updateProgress,
+    claimReward
   };
 }
