@@ -1,90 +1,76 @@
 import { Request, Response } from 'express';
-import { tradingCardService } from '../services/TradingCardService';
+import { TradingCardService } from '../services/TradingCardService';
 
 export class TradingCardController {
-  async generateCard(req: Request, res: Response) {
+  private cardService: TradingCardService;
+
+  constructor(cardService: TradingCardService) {
+    this.cardService = cardService;
+  }
+
+  public async mintCard(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const userId = req.user.id;
+      const { templateName } = req.body;
+
+      if (!templateName) {
+        res.status(400).json({ error: 'Template name is required' });
+        return;
       }
 
-      const { type } = req.body;
-      if (!type) {
-        return res.status(400).json({ error: 'Card type is required' });
-      }
-
-      const card = await tradingCardService.generateCard(userId, type);
-      await tradingCardService.addCardToCollection(userId, card);
-
-      return res.json(card);
+      const card = await this.cardService.mintCard(userId, templateName);
+      res.json(card);
     } catch (error) {
-      console.error('Error generating card:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to mint card' });
     }
   }
 
-  async getCollection(req: Request, res: Response) {
+  public async getCollection(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
-      const collection = await tradingCardService.getCollection(userId);
-      if (!collection) {
-        return res.status(404).json({ error: 'Collection not found' });
-      }
-
-      return res.json(collection);
+      const userId = req.user.id;
+      const collection = await this.cardService.getUserCollection(userId);
+      res.json(collection);
     } catch (error) {
-      console.error('Error getting collection:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch collection' });
     }
   }
 
-  async getCard(req: Request, res: Response) {
+  public async createTrade(req: Request, res: Response): Promise<void> {
     try {
-      const { cardId } = req.params;
-      if (!cardId) {
-        return res.status(400).json({ error: 'Card ID is required' });
+      const initiatorId = req.user.id;
+      const { receiverId, offeredCards, requestedCards } = req.body;
+
+      if (!receiverId || !offeredCards || !requestedCards) {
+        res.status(400).json({ error: 'Missing required trade parameters' });
+        return;
       }
 
-      const card = await tradingCardService.getCard(cardId);
-      if (!card) {
-        return res.status(404).json({ error: 'Card not found' });
-      }
-
-      return res.json(card);
+      const trade = await this.cardService.createTrade(
+        initiatorId,
+        receiverId,
+        offeredCards,
+        requestedCards
+      );
+      res.json(trade);
     } catch (error) {
-      console.error('Error getting card:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to create trade' });
     }
   }
 
-  async tradeCard(req: Request, res: Response) {
+  public async respondToTrade(req: Request, res: Response): Promise<void> {
     try {
-      const fromUserId = req.user?.id;
-      if (!fromUserId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const userId = req.user.id;
+      const { tradeId, accept } = req.body;
+
+      if (typeof accept !== 'boolean' || !tradeId) {
+        res.status(400).json({ error: 'Invalid trade response parameters' });
+        return;
       }
 
-      const { toUserId, cardId } = req.body;
-      if (!toUserId || !cardId) {
-        return res.status(400).json({ error: 'Recipient ID and card ID are required' });
-      }
-
-      const success = await tradingCardService.tradeCard(fromUserId, toUserId, cardId);
-      if (!success) {
-        return res.status(400).json({ error: 'Trade failed' });
-      }
-
-      return res.json({ success: true });
+      const trade = await this.cardService.respondToTrade(tradeId, userId, accept);
+      res.json(trade);
     } catch (error) {
-      console.error('Error trading card:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to respond to trade' });
     }
   }
 }
-
-export const tradingCardController = new TradingCardController();

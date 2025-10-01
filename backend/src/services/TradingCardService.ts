@@ -1,152 +1,98 @@
 import { EventEmitter } from 'events';
-import { InventoryService } from './InventoryService';
-import { TradingService } from './TradingService';
-import { LeaderboardService } from './LeaderboardService';
+import {
+  TradingCard,
+  CardCollection,
+  CardTrade,
+  CardRarity,
+  CardType,
+  TradeStatus
+} from '../types/tradingCards';
 
-export interface TradingCard {
-  id: string;
-  playerId: string;
-  name: string;
-  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
-  type: 'character' | 'achievement' | 'special' | 'event';
-  stats: {
-    level: number;
-    experience: number;
-    achievements: number;
-    combatRating?: number;
-    craftingLevel?: number;
-    specialAbility?: string;
-  };
-  metadata: {
-    imageUrl: string;
-    description: string;
-    issueDate: Date;
-    serialNumber: string;
-    edition: string;
-  };
-  tradeable: boolean;
-  mintCondition: number; // 0-100
-}
-
-export interface CardCollection {
-  userId: string;
-  cards: TradingCard[];
-  stats: {
-    totalCards: number;
-    uniqueCards: number;
-    rarityCount: Record<string, number>;
-  };
-}
-
-export class TradingCardService {
-  private static instance: TradingCardService;
-  private eventEmitter: EventEmitter = new EventEmitter();
-  private collections: Map<string, CardCollection> = new Map();
+export class TradingCardService extends EventEmitter {
   private cards: Map<string, TradingCard> = new Map();
+  private collections: Map<string, CardCollection> = new Map();
+  private trades: Map<string, CardTrade> = new Map();
+  private cardTemplates: Map<string, Partial<TradingCard>> = new Map();
 
-  private constructor(
-    private inventoryService: InventoryService,
-    private tradingService: TradingService,
-    private leaderboardService: LeaderboardService
-  ) {}
-
-  static getInstance(
-    inventoryService: InventoryService,
-    tradingService: TradingService,
-    leaderboardService: LeaderboardService
-  ): TradingCardService {
-    if (!TradingCardService.instance) {
-      TradingCardService.instance = new TradingCardService(
-        inventoryService,
-        tradingService,
-        leaderboardService
-      );
-    }
-    return TradingCardService.instance;
+  constructor() {
+    super();
+    this.initializeCardTemplates();
+    this.startTradeExpiryChecker();
   }
 
-  async generateCard(playerId: string, type: TradingCard['type']): Promise<TradingCard> {
-    const playerStats = await this.leaderboardService.getPlayerStats(playerId);
-    if (!playerStats) {
-      throw new Error('Player not found');
+  private initializeCardTemplates(): void {
+    // Initialize some basic card templates
+    const templates: Partial<TradingCard>[] = [
+      {
+        name: 'Dragon Warrior',
+        description: 'A mighty warrior with dragon blood',
+        rarity: 'LEGENDARY',
+        type: 'CHARACTER',
+        attributes: {
+          power: 90,
+          defense: 85,
+          magic: 70,
+          speed: 75,
+          special: ['Dragon Breath', 'Scale Armor']
+        }
+      },
+      // Add more templates...
+    ];
+
+    templates.forEach(template => {
+      this.cardTemplates.set(template.name!, template);
+    });
+  }
+
+  private startTradeExpiryChecker(): void {
+    setInterval(() => {
+      const now = new Date();
+      for (const [tradeId, trade] of this.trades) {
+        if (
+          trade.status === 'PENDING' &&
+          new Date(trade.expiresAt) <= now
+        ) {
+          trade.status = 'EXPIRED';
+          this.trades.set(tradeId, trade);
+          this.emit('trade:expired', { tradeId });
+        }
+      }
+    }, 60000); // Check every minute
+  }
+
+  public async mintCard(
+    userId: string,
+    templateName: string
+  ): Promise<TradingCard> {
+    const template = this.cardTemplates.get(templateName);
+    if (!template) {
+      throw new Error('Card template not found');
     }
 
+    const totalMinted = Array.from(this.cards.values()).filter(
+      card => card.name === templateName
+    ).length;
+
     const card: TradingCard = {
-      id: crypto.randomUUID(),
-      playerId,
-      name: playerStats.name,
-      rarity: this.calculateRarity(playerStats),
-      type,
-      stats: {
-        level: playerStats.level || 1,
-        experience: playerStats.experience || 0,
-        achievements: playerStats.achievements || 0,
-        combatRating: playerStats.combatRating,
-        craftingLevel: playerStats.craftingLevel,
-        specialAbility: this.generateSpecialAbility(type, playerStats)
-      },
-      metadata: {
-        imageUrl: playerStats.avatarUrl || 'default_card.png',
-        description: this.generateDescription(type, playerStats),
-        issueDate: new Date(),
-        serialNumber: this.generateSerialNumber(),
-        edition: 'First Edition'
-      },
-      tradeable: true,
-      mintCondition: 100
-    };
+      id: `${templateName}-${Date.now()}-${totalMinted + 1}`,
+      ...template,
+      mintNumber: totalMinted + 1,
+      totalMinted: totalMinted + 1,
+      createdAt: new Date().toISOString(),
+      ownerId: userId,
+      imageUrl: `/cards/${templateName.toLowerCase().replace(/\s+/g, '-')}.png`
+    } as TradingCard;
 
     this.cards.set(card.id, card);
+    await this.addCardToCollection(userId, card);
+
     return card;
   }
 
-  private calculateRarity(playerStats: any): TradingCard['rarity'] {
-    const score = (
-      playerStats.level +
-      playerStats.achievements * 2 +
-      (playerStats.combatRating || 0) / 100 +
-      (playerStats.craftingLevel || 0)
-    );
-
-    if (score >= 1000) return 'legendary';
-    if (score >= 500) return 'epic';
-    if (score >= 250) return 'rare';
-    if (score >= 100) return 'uncommon';
-    return 'common';
-  }
-
-  private generateSpecialAbility(type: TradingCard['type'], stats: any): string {
-    const abilities = {
-      character: ['Double XP', 'Critical Hit', 'Resource Boost', 'Trading Bonus'],
-      achievement: ['Achievement Boost', 'Rare Find', 'Bonus Rewards'],
-      special: ['Unique Emote', 'Custom Title', 'Aura Effect'],
-      event: ['Event Bonus', 'Special Access', 'Bonus Rewards']
-    };
-
-    const typeAbilities = abilities[type];
-    return typeAbilities[Math.floor(Math.random() * typeAbilities.length)];
-  }
-
-  private generateDescription(type: TradingCard['type'], stats: any): string {
-    switch (type) {
-      case 'character':
-        return `Level ${stats.level} adventurer with ${stats.achievements} achievements`;
-      case 'achievement':
-        return `Accomplished player with notable achievements in combat and crafting`;
-      case 'special':
-        return `Special edition card featuring unique abilities and bonuses`;
-      case 'event':
-        return `Event participation card with special event bonuses`;
-      default:
-        return `A collectible card from the FlowVerse universe`;
-    }
-  }
-
-  private generateSerialNumber(): string {
-    return `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`.toUpperCase();
-  }
-
-  async addCardToCollection(userId: string, card: TradingCard): Promise<void> {
+  private async addCardToCollection(
+    userId: string,
+    card: TradingCard
+  ): Promise<void> {
     let collection = this.collections.get(userId);
     if (!collection) {
       collection = {
@@ -154,92 +100,155 @@ export class TradingCardService {
         cards: [],
         stats: {
           totalCards: 0,
+          byRarity: {} as Record<CardRarity, number>,
+          byType: {} as Record<CardType, number>,
           uniqueCards: 0,
-          rarityCount: {
-            common: 0,
-            uncommon: 0,
-            rare: 0,
-            epic: 0,
-            legendary: 0
-          }
-        }
+          completeSets: 0
+        },
+        achievements: []
       };
+      this.collections.set(userId, collection);
     }
 
     collection.cards.push(card);
-    collection.stats.totalCards++;
-    collection.stats.rarityCount[card.rarity]++;
-    
-    // Calculate unique cards
-    const uniqueCardIds = new Set(collection.cards.map(c => c.id));
-    collection.stats.uniqueCards = uniqueCardIds.size;
-
-    this.collections.set(userId, collection);
-    this.eventEmitter.emit('cardAdded', { userId, card });
+    this.updateCollectionStats(collection);
   }
 
-  async getCollection(userId: string): Promise<CardCollection | null> {
-    return this.collections.get(userId) || null;
-  }
+  private updateCollectionStats(collection: CardCollection): void {
+    const stats = collection.stats;
+    const cards = collection.cards;
 
-  async getCard(cardId: string): Promise<TradingCard | null> {
-    return this.cards.get(cardId) || null;
-  }
+    stats.totalCards = cards.length;
+    stats.uniqueCards = new Set(cards.map(c => c.name)).size;
 
-  async tradeCard(
-    fromUserId: string,
-    toUserId: string,
-    cardId: string
-  ): Promise<boolean> {
-    const card = await this.getCard(cardId);
-    if (!card || !card.tradeable) {
-      return false;
-    }
+    // Reset counters
+    stats.byRarity = {} as Record<CardRarity, number>;
+    stats.byType = {} as Record<CardType, number>;
 
-    const fromCollection = await this.getCollection(fromUserId);
-    const toCollection = await this.getCollection(toUserId);
-
-    if (!fromCollection || !toCollection) {
-      return false;
-    }
-
-    // Remove card from source collection
-    fromCollection.cards = fromCollection.cards.filter(c => c.id !== cardId);
-    fromCollection.stats.totalCards--;
-    fromCollection.stats.rarityCount[card.rarity]--;
-
-    // Add card to destination collection
-    await this.addCardToCollection(toUserId, card);
-
-    // Update collections
-    this.collections.set(fromUserId, fromCollection);
-
-    this.eventEmitter.emit('cardTraded', {
-      fromUserId,
-      toUserId,
-      card
+    // Count cards by rarity and type
+    cards.forEach(card => {
+      stats.byRarity[card.rarity] = (stats.byRarity[card.rarity] || 0) + 1;
+      stats.byType[card.type] = (stats.byType[card.type] || 0) + 1;
     });
 
-    return true;
+    // Calculate complete sets
+    const cardsBySet = cards.reduce((sets, card) => {
+      sets[card.name] = (sets[card.name] || 0) + 1;
+      return sets;
+    }, {} as Record<string, number>);
+
+    stats.completeSets = Object.values(cardsBySet).filter(count => count >= 3).length;
   }
 
-  onCardAdded(callback: (event: { userId: string; card: TradingCard }) => void) {
-    this.eventEmitter.on('cardAdded', callback);
+  public async getUserCollection(userId: string): Promise<CardCollection> {
+    const collection = this.collections.get(userId);
+    if (!collection) {
+      throw new Error('Collection not found');
+    }
+    return collection;
   }
 
-  onCardTraded(
-    callback: (event: {
-      fromUserId: string;
-      toUserId: string;
-      card: TradingCard;
-    }) => void
-  ) {
-    this.eventEmitter.on('cardTraded', callback);
+  public async createTrade(
+    initiatorId: string,
+    receiverId: string,
+    offeredCardIds: string[],
+    requestedCardIds: string[]
+  ): Promise<CardTrade> {
+    // Validate cards ownership
+    for (const cardId of offeredCardIds) {
+      const card = this.cards.get(cardId);
+      if (!card || card.ownerId !== initiatorId) {
+        throw new Error('Invalid offered card');
+      }
+    }
+
+    for (const cardId of requestedCardIds) {
+      const card = this.cards.get(cardId);
+      if (!card || card.ownerId !== receiverId) {
+        throw new Error('Invalid requested card');
+      }
+    }
+
+    const trade: CardTrade = {
+      id: `TRADE-${Date.now()}`,
+      initiatorId,
+      receiverId,
+      offeredCards: offeredCardIds,
+      requestedCards: requestedCardIds,
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+    };
+
+    this.trades.set(trade.id, trade);
+    this.emit('trade:created', { trade });
+
+    return trade;
+  }
+
+  public async respondToTrade(
+    tradeId: string,
+    userId: string,
+    accept: boolean
+  ): Promise<CardTrade> {
+    const trade = this.trades.get(tradeId);
+    if (!trade || trade.receiverId !== userId) {
+      throw new Error('Trade not found or unauthorized');
+    }
+
+    if (trade.status !== 'PENDING') {
+      throw new Error('Trade is no longer pending');
+    }
+
+    if (accept) {
+      // Execute the trade
+      await this.executeTrade(trade);
+      trade.status = 'COMPLETED';
+    } else {
+      trade.status = 'REJECTED';
+    }
+
+    trade.updatedAt = new Date().toISOString();
+    this.trades.set(trade.id, trade);
+    this.emit('trade:responded', { trade });
+
+    return trade;
+  }
+
+  private async executeTrade(trade: CardTrade): Promise<void> {
+    // Update card ownership
+    for (const cardId of trade.offeredCards) {
+      const card = this.cards.get(cardId)!;
+      card.ownerId = trade.receiverId;
+      this.cards.set(cardId, card);
+    }
+
+    for (const cardId of trade.requestedCards) {
+      const card = this.cards.get(cardId)!;
+      card.ownerId = trade.initiatorId;
+      this.cards.set(cardId, card);
+    }
+
+    // Update collections
+    const initiatorCollection = this.collections.get(trade.initiatorId)!;
+    const receiverCollection = this.collections.get(trade.receiverId)!;
+
+    initiatorCollection.cards = initiatorCollection.cards.filter(
+      card => !trade.offeredCards.includes(card.id)
+    );
+    initiatorCollection.cards.push(
+      ...trade.requestedCards.map(id => this.cards.get(id)!)
+    );
+
+    receiverCollection.cards = receiverCollection.cards.filter(
+      card => !trade.requestedCards.includes(card.id)
+    );
+    receiverCollection.cards.push(
+      ...trade.offeredCards.map(id => this.cards.get(id)!)
+    );
+
+    this.updateCollectionStats(initiatorCollection);
+    this.updateCollectionStats(receiverCollection);
   }
 }
-
-export const tradingCardService = TradingCardService.getInstance(
-  new InventoryService(),
-  TradingService.getInstance(),
-  new LeaderboardService()
-);
