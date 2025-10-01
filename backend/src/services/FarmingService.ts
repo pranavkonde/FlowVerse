@@ -1,349 +1,380 @@
 import { EventEmitter } from 'events';
-import { CraftingService } from './CraftingService';
-import { LandService } from './LandService';
-import { InventoryService } from './InventoryService';
-
-export interface Crop {
-  id: string;
-  name: string;
-  description: string;
-  growthTime: number; // in milliseconds
-  stages: {
-    name: string;
-    duration: number;
-    imageUrl: string;
-  }[];
-  requirements: {
-    level: number;
-    tools?: string[];
-    items?: { id: string; quantity: number }[];
-  };
-  yield: {
-    itemId: string;
-    name: string;
-    baseQuantity: number;
-    qualityMultiplier: number;
-  };
-  wateringInterval: number; // in milliseconds
-  fertilizable: boolean;
-  harvestable: boolean;
-  season: 'spring' | 'summer' | 'fall' | 'winter' | 'all';
-}
-
-export interface Plot {
-  id: string;
-  ownerId: string;
-  position: { x: number; y: number };
-  status: 'empty' | 'tilled' | 'planted' | 'ready';
-  crop?: {
-    id: string;
-    plantedAt: Date;
-    lastWatered: Date;
-    lastFertilized?: Date;
-    currentStage: number;
-    quality: number; // 0-100
-    diseased: boolean;
-  };
-}
+import {
+  FarmPlot,
+  Crop,
+  FarmingTool,
+  CropTemplate,
+  FarmingStats,
+  Season,
+  PlotStatus,
+  CropType,
+  GrowthStage,
+  CropQuality,
+  SoilType
+} from '../types/farming';
 
 export class FarmingService extends EventEmitter {
-  private static instance: FarmingService;
-  private plots: Map<string, Plot> = new Map();
-  private crops: Map<string, Crop> = new Map();
-  private growthIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private plots: Map<string, FarmPlot> = new Map();
+  private tools: Map<string, FarmingTool> = new Map();
+  private cropTemplates: Map<string, CropTemplate> = new Map();
+  private userStats: Map<string, FarmingStats> = new Map();
+  private currentSeason: Season;
 
-  private constructor(
-    private craftingService: CraftingService,
-    private landService: LandService,
-    private inventoryService: InventoryService
-  ) {
+  constructor() {
     super();
-    this.initializeDefaultCrops();
+    this.currentSeason = this.calculateCurrentSeason();
+    this.initializeCropTemplates();
     this.startGrowthCycle();
+    this.startSeasonalCheck();
   }
 
-  static getInstance(
-    craftingService: CraftingService,
-    landService: LandService,
-    inventoryService: InventoryService
-  ): FarmingService {
-    if (!FarmingService.instance) {
-      FarmingService.instance = new FarmingService(
-        craftingService,
-        landService,
-        inventoryService
-      );
-    }
-    return FarmingService.instance;
+  private calculateCurrentSeason(): Season {
+    const month = new Date().getMonth();
+    if (month >= 2 && month <= 4) return 'SPRING';
+    if (month >= 5 && month <= 7) return 'SUMMER';
+    if (month >= 8 && month <= 10) return 'FALL';
+    return 'WINTER';
   }
 
-  private initializeDefaultCrops() {
-    const defaultCrops: Crop[] = [
+  private initializeCropTemplates(): void {
+    const templates: CropTemplate[] = [
       {
-        id: 'carrot',
-        name: 'Carrot',
-        description: 'A basic root vegetable, perfect for beginners',
-        growthTime: 5 * 60 * 1000, // 5 minutes for testing (would be longer in production)
-        stages: [
-          { name: 'seed', duration: 1000, imageUrl: '/assets/crops/carrot_seed.png' },
-          { name: 'sprout', duration: 2000, imageUrl: '/assets/crops/carrot_sprout.png' },
-          { name: 'growing', duration: 1000, imageUrl: '/assets/crops/carrot_growing.png' },
-          { name: 'mature', duration: 1000, imageUrl: '/assets/crops/carrot_mature.png' }
-        ],
-        requirements: {
-          level: 1,
-          tools: ['basic_hoe'],
-          items: [{ id: 'carrot_seeds', quantity: 1 }]
-        },
-        yield: {
-          itemId: 'carrot',
-          name: 'Carrot',
-          baseQuantity: 3,
-          qualityMultiplier: 1.2
-        },
-        wateringInterval: 2 * 60 * 1000, // 2 minutes
-        fertilizable: true,
-        harvestable: true,
-        season: 'spring'
+        name: 'Tomato',
+        type: 'VEGETABLE',
+        growthTime: 30, // 30 minutes for demo
+        waterNeeded: 70,
+        fertilityNeeded: 60,
+        seasonalBonus: ['SUMMER'],
+        possibleYield: { min: 3, max: 6 },
+        value: 10
       },
       {
-        id: 'tomato',
-        name: 'Tomato',
-        description: 'A versatile fruit that grows on vines',
-        growthTime: 8 * 60 * 1000, // 8 minutes for testing
-        stages: [
-          { name: 'seed', duration: 2000, imageUrl: '/assets/crops/tomato_seed.png' },
-          { name: 'sprout', duration: 2000, imageUrl: '/assets/crops/tomato_sprout.png' },
-          { name: 'growing', duration: 2000, imageUrl: '/assets/crops/tomato_growing.png' },
-          { name: 'mature', duration: 2000, imageUrl: '/assets/crops/tomato_mature.png' }
-        ],
-        requirements: {
-          level: 2,
-          tools: ['basic_hoe'],
-          items: [{ id: 'tomato_seeds', quantity: 1 }]
-        },
-        yield: {
-          itemId: 'tomato',
-          name: 'Tomato',
-          baseQuantity: 4,
-          qualityMultiplier: 1.3
-        },
-        wateringInterval: 3 * 60 * 1000, // 3 minutes
-        fertilizable: true,
-        harvestable: true,
-        season: 'summer'
+        name: 'Wheat',
+        type: 'GRAIN',
+        growthTime: 45,
+        waterNeeded: 50,
+        fertilityNeeded: 40,
+        seasonalBonus: ['SUMMER', 'FALL'],
+        possibleYield: { min: 4, max: 8 },
+        value: 5
+      },
+      {
+        name: 'Magic Mushroom',
+        type: 'MAGICAL',
+        growthTime: 60,
+        waterNeeded: 80,
+        fertilityNeeded: 90,
+        seasonalBonus: ['SPRING', 'FALL'],
+        possibleYield: { min: 1, max: 3 },
+        value: 50
       }
-      // Add more crops as needed
+      // Add more templates...
     ];
 
-    defaultCrops.forEach(crop => this.crops.set(crop.id, crop));
+    templates.forEach(template => {
+      this.cropTemplates.set(template.name, template);
+    });
   }
 
-  private startGrowthCycle() {
-    // Check crop growth every minute
+  private startGrowthCycle(): void {
     setInterval(() => {
-      const now = new Date();
-      
-      this.plots.forEach((plot, plotId) => {
-        if (plot.status !== 'planted' || !plot.crop) return;
+      for (const [plotId, plot] of this.plots) {
+        if (!plot.crop || plot.status === 'DISEASED') continue;
 
-        const crop = this.crops.get(plot.crop.id);
-        if (!crop) return;
+        const now = new Date();
+        const plantedTime = new Date(plot.crop.plantedAt);
+        const harvestTime = new Date(plot.crop.harvestableAt);
 
-        // Calculate current stage
-        const elapsedTime = now.getTime() - plot.crop.plantedAt.getTime();
-        let totalStageDuration = 0;
-        let currentStage = 0;
+        if (now >= harvestTime && plot.status === 'GROWING') {
+          plot.status = 'HARVESTABLE';
+          this.plots.set(plotId, plot);
+          this.emit('crop:harvestable', { plotId });
+          continue;
+        }
 
-        for (let i = 0; i < crop.stages.length; i++) {
-          totalStageDuration += crop.stages[i].duration;
-          if (elapsedTime >= totalStageDuration) {
-            currentStage = i + 1;
+        // Update growth stage based on progress
+        const progress = (now.getTime() - plantedTime.getTime()) /
+          (harvestTime.getTime() - plantedTime.getTime());
+
+        let newStage: GrowthStage = 'SEED';
+        if (progress >= 0.25) newStage = 'SPROUT';
+        if (progress >= 0.5) newStage = 'GROWING';
+        if (progress >= 0.75) newStage = 'FLOWERING';
+        if (progress >= 1) newStage = 'MATURE';
+
+        if (newStage !== plot.crop.growthStage) {
+          plot.crop.growthStage = newStage;
+          this.plots.set(plotId, plot);
+          this.emit('crop:stage-changed', { plotId, stage: newStage });
+        }
+
+        // Check for disease
+        if (
+          plot.moisture < plot.crop.waterNeeded * 0.5 ||
+          plot.fertility < plot.crop.fertilityNeeded * 0.5
+        ) {
+          const diseaseChance = Math.random();
+          if (diseaseChance < 0.1) { // 10% chance of disease when conditions are poor
+            plot.status = 'DISEASED';
+            plot.crop.diseased = true;
+            this.plots.set(plotId, plot);
+            this.emit('crop:diseased', { plotId });
           }
         }
-
-        // Update stage if changed
-        if (currentStage !== plot.crop.currentStage) {
-          plot.crop.currentStage = currentStage;
-          this.emit('cropStageChanged', { plotId, stage: currentStage });
-        }
-
-        // Check if crop needs water
-        const timeSinceWatered = now.getTime() - plot.crop.lastWatered.getTime();
-        if (timeSinceWatered > crop.wateringInterval) {
-          plot.crop.quality = Math.max(0, plot.crop.quality - 10);
-          this.emit('cropNeedsWater', { plotId });
-        }
-
-        // Check if crop is ready to harvest
-        if (elapsedTime >= crop.growthTime && plot.status !== 'ready') {
-          plot.status = 'ready';
-          this.emit('cropReady', { plotId, cropId: crop.id });
-        }
-
-        this.plots.set(plotId, plot);
-      });
+      }
     }, 60000); // Check every minute
   }
 
-  async createPlot(ownerId: string, position: { x: number; y: number }): Promise<Plot> {
-    const plot: Plot = {
-      id: crypto.randomUUID(),
-      ownerId,
+  private startSeasonalCheck(): void {
+    setInterval(() => {
+      const newSeason = this.calculateCurrentSeason();
+      if (newSeason !== this.currentSeason) {
+        this.currentSeason = newSeason;
+        this.emit('season:changed', { season: this.currentSeason });
+      }
+    }, 3600000); // Check every hour
+  }
+
+  public async createPlot(
+    userId: string,
+    position: { x: number; y: number }
+  ): Promise<FarmPlot> {
+    const plot: FarmPlot = {
+      id: `PLOT-${Date.now()}`,
+      ownerId: userId,
       position,
-      status: 'empty'
+      soil: 'BASIC',
+      moisture: 50,
+      fertility: 50,
+      status: 'EMPTY'
     };
 
     this.plots.set(plot.id, plot);
     return plot;
   }
 
-  async tillPlot(plotId: string, userId: string, toolId: string): Promise<boolean> {
-    const plot = this.plots.get(plotId);
-    if (!plot || plot.status !== 'empty' || plot.ownerId !== userId) {
-      return false;
-    }
-
-    // Verify tool ownership and type
-    // This would integrate with your inventory system
-    
-    plot.status = 'tilled';
-    this.plots.set(plotId, plot);
-    this.emit('plotTilled', { plotId, userId });
-    return true;
-  }
-
-  async plantCrop(
-    plotId: string,
+  public async tillPlot(
     userId: string,
-    cropId: string
-  ): Promise<boolean> {
-    const plot = this.plots.get(plotId);
-    const crop = this.crops.get(cropId);
-
-    if (
-      !plot ||
-      !crop ||
-      plot.status !== 'tilled' ||
-      plot.ownerId !== userId
-    ) {
-      return false;
-    }
-
-    // Verify requirements
-    // This would integrate with your inventory and level systems
-
-    plot.status = 'planted';
-    plot.crop = {
-      id: cropId,
-      plantedAt: new Date(),
-      lastWatered: new Date(),
-      currentStage: 0,
-      quality: 100,
-      diseased: false
-    };
-
-    this.plots.set(plotId, plot);
-    this.emit('cropPlanted', { plotId, cropId, userId });
-    return true;
-  }
-
-  async waterCrop(plotId: string, userId: string): Promise<boolean> {
-    const plot = this.plots.get(plotId);
-    if (!plot || !plot.crop || plot.ownerId !== userId) {
-      return false;
-    }
-
-    plot.crop.lastWatered = new Date();
-    plot.crop.quality = Math.min(100, plot.crop.quality + 5);
-
-    this.plots.set(plotId, plot);
-    this.emit('cropWatered', { plotId, userId });
-    return true;
-  }
-
-  async fertilizeCrop(
     plotId: string,
-    userId: string,
-    fertilizerId: string
-  ): Promise<boolean> {
+    toolId: string
+  ): Promise<FarmPlot> {
     const plot = this.plots.get(plotId);
-    if (
-      !plot ||
-      !plot.crop ||
-      plot.ownerId !== userId ||
-      !plot.crop.lastFertilized
-    ) {
-      return false;
+    if (!plot || plot.ownerId !== userId) {
+      throw new Error('Plot not found or unauthorized');
     }
 
-    // Verify fertilizer ownership and apply effects
-    // This would integrate with your inventory system
+    if (plot.status !== 'EMPTY') {
+      throw new Error('Plot is not empty');
+    }
 
-    plot.crop.lastFertilized = new Date();
-    plot.crop.quality = Math.min(100, plot.crop.quality + 10);
+    const tool = this.tools.get(toolId);
+    if (!tool || tool.type !== 'HOE') {
+      throw new Error('Invalid tool for tilling');
+    }
 
+    plot.status = 'TILLED';
     this.plots.set(plotId, plot);
-    this.emit('cropFertilized', { plotId, userId, fertilizerId });
-    return true;
+    this.emit('plot:tilled', { plotId });
+
+    return plot;
   }
 
-  async harvestCrop(plotId: string, userId: string): Promise<boolean> {
+  public async plantCrop(
+    userId: string,
+    plotId: string,
+    cropName: string
+  ): Promise<FarmPlot> {
     const plot = this.plots.get(plotId);
-    if (!plot || !plot.crop || plot.status !== 'ready' || plot.ownerId !== userId) {
-      return false;
+    if (!plot || plot.ownerId !== userId) {
+      throw new Error('Plot not found or unauthorized');
     }
 
-    const crop = this.crops.get(plot.crop.id);
-    if (!crop) {
-      return false;
+    if (plot.status !== 'TILLED') {
+      throw new Error('Plot is not ready for planting');
     }
 
-    // Calculate yield based on quality
-    const yieldQuantity = Math.floor(
-      crop.yield.baseQuantity * (plot.crop.quality / 100) * crop.yield.qualityMultiplier
+    const template = this.cropTemplates.get(cropName);
+    if (!template) {
+      throw new Error('Invalid crop type');
+    }
+
+    const now = new Date();
+    const harvestTime = new Date(
+      now.getTime() + template.growthTime * 60000
     );
 
-    // Add harvested items to inventory
-    // This would integrate with your inventory system
+    const crop: Crop = {
+      id: `CROP-${Date.now()}`,
+      name: template.name,
+      type: template.type,
+      growthStage: 'SEED',
+      plantedAt: now.toISOString(),
+      harvestableAt: harvestTime.toISOString(),
+      quality: 'NORMAL',
+      diseased: false,
+      waterNeeded: template.waterNeeded,
+      fertilityNeeded: template.fertilityNeeded
+    };
+
+    plot.crop = crop;
+    plot.status = 'PLANTED';
+    this.plots.set(plotId, plot);
+    this.emit('crop:planted', { plotId });
+
+    return plot;
+  }
+
+  public async waterPlot(
+    userId: string,
+    plotId: string,
+    toolId: string
+  ): Promise<FarmPlot> {
+    const plot = this.plots.get(plotId);
+    if (!plot || plot.ownerId !== userId) {
+      throw new Error('Plot not found or unauthorized');
+    }
+
+    const tool = this.tools.get(toolId);
+    if (!tool || tool.type !== 'WATERING_CAN') {
+      throw new Error('Invalid tool for watering');
+    }
+
+    plot.moisture = Math.min(100, plot.moisture + 30 * tool.efficiency);
+    plot.lastWatered = new Date().toISOString();
+    this.plots.set(plotId, plot);
+    this.emit('plot:watered', { plotId });
+
+    return plot;
+  }
+
+  public async fertilizePlot(
+    userId: string,
+    plotId: string,
+    toolId: string
+  ): Promise<FarmPlot> {
+    const plot = this.plots.get(plotId);
+    if (!plot || plot.ownerId !== userId) {
+      throw new Error('Plot not found or unauthorized');
+    }
+
+    const tool = this.tools.get(toolId);
+    if (!tool || tool.type !== 'FERTILIZER') {
+      throw new Error('Invalid tool for fertilizing');
+    }
+
+    plot.fertility = Math.min(100, plot.fertility + 20 * tool.efficiency);
+    plot.lastFertilized = new Date().toISOString();
+    this.plots.set(plotId, plot);
+    this.emit('plot:fertilized', { plotId });
+
+    return plot;
+  }
+
+  public async harvestCrop(
+    userId: string,
+    plotId: string,
+    toolId: string
+  ): Promise<{ plot: FarmPlot; yield: number; quality: CropQuality }> {
+    const plot = this.plots.get(plotId);
+    if (!plot || plot.ownerId !== userId || !plot.crop) {
+      throw new Error('Plot not found, unauthorized, or no crop');
+    }
+
+    if (plot.status !== 'HARVESTABLE') {
+      throw new Error('Crop is not ready for harvest');
+    }
+
+    const tool = this.tools.get(toolId);
+    if (!tool || tool.type !== 'HARVEST_BASKET') {
+      throw new Error('Invalid tool for harvesting');
+    }
+
+    const template = this.cropTemplates.get(plot.crop.name);
+    if (!template) {
+      throw new Error('Crop template not found');
+    }
+
+    // Calculate quality based on conditions
+    let quality: CropQuality = 'NORMAL';
+    const conditions = (plot.moisture / plot.crop.waterNeeded) +
+      (plot.fertility / plot.crop.fertilityNeeded);
+    
+    if (conditions >= 2) quality = 'PERFECT';
+    else if (conditions >= 1.75) quality = 'EXCELLENT';
+    else if (conditions >= 1.5) quality = 'GOOD';
+    else if (conditions < 1) quality = 'POOR';
+
+    // Calculate yield
+    const baseYield = Math.floor(
+      Math.random() * (template.possibleYield.max - template.possibleYield.min + 1) +
+      template.possibleYield.min
+    );
+
+    let finalYield = baseYield;
+    if (template.seasonalBonus.includes(this.currentSeason)) {
+      finalYield = Math.ceil(finalYield * 1.5);
+    }
+
+    // Update stats
+    let stats = this.userStats.get(userId);
+    if (!stats) {
+      stats = {
+        totalHarvests: 0,
+        cropsByType: {} as Record<CropType, number>,
+        qualityAchieved: {} as Record<CropQuality, number>,
+        diseaseRate: 0,
+        perfectCrops: 0,
+        totalEarnings: 0
+      };
+    }
+
+    stats.totalHarvests++;
+    stats.cropsByType[plot.crop.type] = (stats.cropsByType[plot.crop.type] || 0) + 1;
+    stats.qualityAchieved[quality] = (stats.qualityAchieved[quality] || 0) + 1;
+    if (quality === 'PERFECT') stats.perfectCrops++;
+    stats.totalEarnings += template.value * finalYield;
+
+    this.userStats.set(userId, stats);
 
     // Reset plot
-    plot.status = 'empty';
     plot.crop = undefined;
-
+    plot.status = 'EMPTY';
+    plot.moisture = 50;
+    plot.fertility = 50;
     this.plots.set(plotId, plot);
-    this.emit('cropHarvested', {
+
+    this.emit('crop:harvested', {
       plotId,
-      userId,
-      cropId: crop.id,
-      quantity: yieldQuantity,
-      quality: plot.crop.quality
+      yield: finalYield,
+      quality,
+      earnings: template.value * finalYield
     });
 
-    return true;
+    return { plot, yield: finalYield, quality };
   }
 
-  async getPlot(plotId: string): Promise<Plot | null> {
-    return this.plots.get(plotId) || null;
+  public async getUserStats(userId: string): Promise<FarmingStats> {
+    return (
+      this.userStats.get(userId) || {
+        totalHarvests: 0,
+        cropsByType: {},
+        qualityAchieved: {},
+        diseaseRate: 0,
+        perfectCrops: 0,
+        totalEarnings: 0
+      }
+    );
   }
 
-  async getUserPlots(userId: string): Promise<Plot[]> {
-    return Array.from(this.plots.values()).filter(plot => plot.ownerId === userId);
+  public async getUserPlots(userId: string): Promise<FarmPlot[]> {
+    return Array.from(this.plots.values()).filter(
+      plot => plot.ownerId === userId
+    );
   }
 
-  async getCrop(cropId: string): Promise<Crop | null> {
-    return this.crops.get(cropId) || null;
-  }
-
-  async getAvailableCrops(season: string): Promise<Crop[]> {
-    return Array.from(this.crops.values()).filter(
-      crop => crop.season === season || crop.season === 'all'
+  public async getAvailableCrops(): Promise<CropTemplate[]> {
+    return Array.from(this.cropTemplates.values()).filter(template =>
+      template.seasonalBonus.includes(this.currentSeason)
     );
   }
 }
-
-export const farmingService = FarmingService.getInstance(
-  new CraftingService(null as any), // Pass proper SocketIO instance
-  new LandService(),
-  new InventoryService()
-);

@@ -1,195 +1,141 @@
 import { Request, Response } from 'express';
-import { farmingService } from '../services/FarmingService';
+import { FarmingService } from '../services/FarmingService';
 
 export class FarmingController {
-  async createPlot(req: Request, res: Response) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
+  private farmingService: FarmingService;
 
+  constructor(farmingService: FarmingService) {
+    this.farmingService = farmingService;
+  }
+
+  public async createPlot(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user.id;
       const { position } = req.body;
+
       if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') {
-        return res.status(400).json({ error: 'Valid position coordinates are required' });
+        res.status(400).json({ error: 'Invalid position coordinates' });
+        return;
       }
 
-      const plot = await farmingService.createPlot(userId, position);
-      return res.json(plot);
+      const plot = await this.farmingService.createPlot(userId, position);
+      res.json(plot);
     } catch (error) {
-      console.error('Error creating plot:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to create plot' });
     }
   }
 
-  async tillPlot(req: Request, res: Response) {
+  public async tillPlot(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
+      const userId = req.user.id;
       const { plotId, toolId } = req.body;
+
       if (!plotId || !toolId) {
-        return res.status(400).json({ error: 'Plot ID and tool ID are required' });
+        res.status(400).json({ error: 'Plot ID and tool ID are required' });
+        return;
       }
 
-      const success = await farmingService.tillPlot(plotId, userId, toolId);
-      if (!success) {
-        return res.status(400).json({ error: 'Failed to till plot' });
-      }
-
-      return res.json({ success: true });
+      const plot = await this.farmingService.tillPlot(userId, plotId, toolId);
+      res.json(plot);
     } catch (error) {
-      console.error('Error tilling plot:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to till plot' });
     }
   }
 
-  async plantCrop(req: Request, res: Response) {
+  public async plantCrop(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const userId = req.user.id;
+      const { plotId, cropName } = req.body;
+
+      if (!plotId || !cropName) {
+        res.status(400).json({ error: 'Plot ID and crop name are required' });
+        return;
       }
 
-      const { plotId, cropId } = req.body;
-      if (!plotId || !cropId) {
-        return res.status(400).json({ error: 'Plot ID and crop ID are required' });
-      }
-
-      const success = await farmingService.plantCrop(plotId, userId, cropId);
-      if (!success) {
-        return res.status(400).json({ error: 'Failed to plant crop' });
-      }
-
-      return res.json({ success: true });
+      const plot = await this.farmingService.plantCrop(userId, plotId, cropName);
+      res.json(plot);
     } catch (error) {
-      console.error('Error planting crop:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to plant crop' });
     }
   }
 
-  async waterCrop(req: Request, res: Response) {
+  public async waterPlot(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const userId = req.user.id;
+      const { plotId, toolId } = req.body;
+
+      if (!plotId || !toolId) {
+        res.status(400).json({ error: 'Plot ID and tool ID are required' });
+        return;
       }
 
-      const { plotId } = req.body;
-      if (!plotId) {
-        return res.status(400).json({ error: 'Plot ID is required' });
-      }
-
-      const success = await farmingService.waterCrop(plotId, userId);
-      if (!success) {
-        return res.status(400).json({ error: 'Failed to water crop' });
-      }
-
-      return res.json({ success: true });
+      const plot = await this.farmingService.waterPlot(userId, plotId, toolId);
+      res.json(plot);
     } catch (error) {
-      console.error('Error watering crop:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to water plot' });
     }
   }
 
-  async fertilizeCrop(req: Request, res: Response) {
+  public async fertilizePlot(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const userId = req.user.id;
+      const { plotId, toolId } = req.body;
+
+      if (!plotId || !toolId) {
+        res.status(400).json({ error: 'Plot ID and tool ID are required' });
+        return;
       }
 
-      const { plotId, fertilizerId } = req.body;
-      if (!plotId || !fertilizerId) {
-        return res.status(400).json({ error: 'Plot ID and fertilizer ID are required' });
-      }
-
-      const success = await farmingService.fertilizeCrop(plotId, userId, fertilizerId);
-      if (!success) {
-        return res.status(400).json({ error: 'Failed to fertilize crop' });
-      }
-
-      return res.json({ success: true });
+      const plot = await this.farmingService.fertilizePlot(userId, plotId, toolId);
+      res.json(plot);
     } catch (error) {
-      console.error('Error fertilizing crop:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fertilize plot' });
     }
   }
 
-  async harvestCrop(req: Request, res: Response) {
+  public async harvestCrop(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const userId = req.user.id;
+      const { plotId, toolId } = req.body;
+
+      if (!plotId || !toolId) {
+        res.status(400).json({ error: 'Plot ID and tool ID are required' });
+        return;
       }
 
-      const { plotId } = req.body;
-      if (!plotId) {
-        return res.status(400).json({ error: 'Plot ID is required' });
-      }
-
-      const success = await farmingService.harvestCrop(plotId, userId);
-      if (!success) {
-        return res.status(400).json({ error: 'Failed to harvest crop' });
-      }
-
-      return res.json({ success: true });
+      const result = await this.farmingService.harvestCrop(userId, plotId, toolId);
+      res.json(result);
     } catch (error) {
-      console.error('Error harvesting crop:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to harvest crop' });
     }
   }
 
-  async getPlot(req: Request, res: Response) {
+  public async getUserStats(req: Request, res: Response): Promise<void> {
     try {
-      const { plotId } = req.params;
-      if (!plotId) {
-        return res.status(400).json({ error: 'Plot ID is required' });
-      }
-
-      const plot = await farmingService.getPlot(plotId);
-      if (!plot) {
-        return res.status(404).json({ error: 'Plot not found' });
-      }
-
-      return res.json(plot);
+      const userId = req.user.id;
+      const stats = await this.farmingService.getUserStats(userId);
+      res.json(stats);
     } catch (error) {
-      console.error('Error getting plot:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch farming stats' });
     }
   }
 
-  async getUserPlots(req: Request, res: Response) {
+  public async getUserPlots(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
-      const plots = await farmingService.getUserPlots(userId);
-      return res.json(plots);
+      const userId = req.user.id;
+      const plots = await this.farmingService.getUserPlots(userId);
+      res.json(plots);
     } catch (error) {
-      console.error('Error getting user plots:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch user plots' });
     }
   }
 
-  async getAvailableCrops(req: Request, res: Response) {
+  public async getAvailableCrops(req: Request, res: Response): Promise<void> {
     try {
-      const { season } = req.query;
-      if (typeof season !== 'string') {
-        return res.status(400).json({ error: 'Valid season is required' });
-      }
-
-      const crops = await farmingService.getAvailableCrops(season);
-      return res.json(crops);
+      const crops = await this.farmingService.getAvailableCrops();
+      res.json(crops);
     } catch (error) {
-      console.error('Error getting available crops:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch available crops' });
     }
   }
 }
-
-export const farmingController = new FarmingController();
