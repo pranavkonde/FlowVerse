@@ -2,26 +2,44 @@ export interface DailyChallenge {
   id: string;
   title: string;
   description: string;
-  type: 'combat' | 'collection' | 'social' | 'exploration' | 'crafting';
-  requirement: {
-    type: string;
-    target: number;
-    current?: number;
-  };
-  rewards: {
-    tokens: number;
-    items: string[];
-    experience: number;
-  };
-  startTime: Date;
-  endTime: Date;
+  type: ChallengeCategoryType;
+  requirement: number;
+  reward: ChallengeReward;
+  expiresAt: string;
+  isActive: boolean;
 }
 
-export interface UserChallengeProgress {
-  userId: string;
+export type ChallengeCategoryType =
+  | 'COMBAT'
+  | 'CRAFTING'
+  | 'GATHERING'
+  | 'SOCIAL'
+  | 'EXPLORATION'
+  | 'PET_CARE'
+  | 'FARMING'
+  | 'FISHING'
+  | 'MUSIC'
+  | 'TRADING';
+
+export interface ChallengeReward {
+  type: RewardType;
+  amount: number;
+  itemId?: string;
+}
+
+export type RewardType =
+  | 'CURRENCY'
+  | 'EXPERIENCE'
+  | 'ITEM'
+  | 'PET_ITEM'
+  | 'CRAFTING_MATERIAL'
+  | 'SPECIAL_CURRENCY';
+
+export interface ChallengeProgress {
   challengeId: string;
-  progress: number;
-  completed: boolean;
+  currentProgress: number;
+  isCompleted: boolean;
+  completedAt?: string;
   claimed: boolean;
-  completedAt?: Date;
+  claimedAt?: string;
 }
