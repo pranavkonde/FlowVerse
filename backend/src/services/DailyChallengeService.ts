@@ -1,197 +1,152 @@
-import { LeaderboardService } from './LeaderboardService';
-import { ProgressTrackingService } from './ProgressTrackingService';
-import { AchievementService } from './AchievementService';
+import { EventEmitter } from 'events';
+import { DailyChallenge, ChallengeCategoryType, ChallengeProgress } from '../types/challenges';
 
-export interface DailyChallenge {
-  id: string;
-  title: string;
-  description: string;
-  type: 'combat' | 'collection' | 'social' | 'exploration' | 'crafting';
-  requirement: {
-    type: string;
-    target: number;
-    current?: number;
-  };
-  rewards: {
-    tokens: number;
-    items: string[];
-    experience: number;
-  };
-  startTime: Date;
-  endTime: Date;
-}
+export class DailyChallengeService extends EventEmitter {
+  private challenges: Map<string, DailyChallenge> = new Map();
+  private userProgress: Map<string, Map<string, ChallengeProgress>> = new Map();
+  private challengeGenerators: Map<ChallengeCategoryType, () => Partial<DailyChallenge>> = new Map();
 
-export interface UserChallengeProgress {
-  userId: string;
-  challengeId: string;
-  progress: number;
-  completed: boolean;
-  claimed: boolean;
-  completedAt?: Date;
-}
-
-export class DailyChallengeService {
-  private static instance: DailyChallengeService;
-  private currentChallenges: Map<string, DailyChallenge> = new Map();
-  private userProgress: Map<string, UserChallengeProgress[]> = new Map();
-  
-  private constructor(
-    private leaderboardService: LeaderboardService,
-    private progressTrackingService: ProgressTrackingService,
-    private achievementService: AchievementService
-  ) {
-    this.generateDailyChallenges();
-    // Refresh challenges daily at midnight
-    setInterval(() => this.generateDailyChallenges(), 24 * 60 * 60 * 1000);
+  constructor() {
+    super();
+    this.initializeChallengeGenerators();
+    this.startDailyRefresh();
   }
 
-  static getInstance(
-    leaderboardService: LeaderboardService,
-    progressTrackingService: ProgressTrackingService,
-    achievementService: AchievementService
-  ): DailyChallengeService {
-    if (!DailyChallengeService.instance) {
-      DailyChallengeService.instance = new DailyChallengeService(
-        leaderboardService,
-        progressTrackingService,
-        achievementService
-      );
-    }
-    return DailyChallengeService.instance;
+  private initializeChallengeGenerators(): void {
+    // Combat challenges
+    this.challengeGenerators.set('COMBAT', () => ({
+      title: 'Daily Combat Master',
+      description: 'Win battles in the arena',
+      type: 'COMBAT',
+      requirement: 3,
+      reward: { type: 'CURRENCY', amount: 100 }
+    }));
+
+    // Crafting challenges
+    this.challengeGenerators.set('CRAFTING', () => ({
+      title: 'Master Crafter',
+      description: 'Craft rare items',
+      type: 'CRAFTING',
+      requirement: 5,
+      reward: { type: 'CRAFTING_MATERIAL', amount: 3 }
+    }));
+
+    // Add more generators for other categories...
   }
 
-  private generateDailyChallenges() {
-    const challenges: DailyChallenge[] = [
-      {
-        id: 'daily_combat_1',
-        title: 'Warrior\'s Training',
-        description: 'Defeat 10 enemies in combat',
-        type: 'combat',
-        requirement: {
-          type: 'enemies_defeated',
-          target: 10
-        },
-        rewards: {
-          tokens: 100,
-          items: ['combat_potion', 'warrior_scroll'],
-          experience: 200
-        },
-        startTime: new Date(),
-        endTime: new Date(new Date().setHours(23, 59, 59, 999))
-      },
-      {
-        id: 'daily_collection_1',
-        title: 'Resource Gatherer',
-        description: 'Collect 20 resources from the world',
-        type: 'collection',
-        requirement: {
-          type: 'resources_collected',
-          target: 20
-        },
-        rewards: {
-          tokens: 75,
-          items: ['gathering_gloves', 'resource_bag'],
-          experience: 150
-        },
-        startTime: new Date(),
-        endTime: new Date(new Date().setHours(23, 59, 59, 999))
-      },
-      {
-        id: 'daily_social_1',
-        title: 'Social Butterfly',
-        description: 'Interact with 5 different players',
-        type: 'social',
-        requirement: {
-          type: 'player_interactions',
-          target: 5
-        },
-        rewards: {
-          tokens: 50,
-          items: ['friendship_badge', 'chat_emote'],
-          experience: 100
-        },
-        startTime: new Date(),
-        endTime: new Date(new Date().setHours(23, 59, 59, 999))
+  private startDailyRefresh(): void {
+    const refreshChallenges = () => {
+      this.generateDailyChallenges();
+      this.emit('challenges:refreshed');
+    };
+
+    // Refresh challenges at midnight
+    setInterval(() => {
+      const now = new Date();
+      if (now.getHours() === 0 && now.getMinutes() === 0) {
+        refreshChallenges();
       }
-    ];
+    }, 60000); // Check every minute
 
-    this.currentChallenges.clear();
-    challenges.forEach(challenge => this.currentChallenges.set(challenge.id, challenge));
+    // Initial generation
+    refreshChallenges();
   }
 
-  async getCurrentChallenges(): Promise<DailyChallenge[]> {
-    return Array.from(this.currentChallenges.values());
+  private generateDailyChallenges(): void {
+    this.challenges.clear();
+    
+    for (const [type, generator] of this.challengeGenerators) {
+      const challenge: DailyChallenge = {
+        id: `${type}-${Date.now()}`,
+        ...generator(),
+        expiresAt: new Date(new Date().setHours(24, 0, 0, 0)).toISOString(),
+        isActive: true
+      } as DailyChallenge;
+
+      this.challenges.set(challenge.id, challenge);
+    }
   }
 
-  async getUserProgress(userId: string): Promise<UserChallengeProgress[]> {
-    if (!this.userProgress.has(userId)) {
-      this.userProgress.set(userId, []);
-    }
-    return this.userProgress.get(userId) || [];
+  public async getUserChallenges(userId: string): Promise<DailyChallenge[]> {
+    const userProgressMap = this.userProgress.get(userId) || new Map();
+    return Array.from(this.challenges.values()).map(challenge => ({
+      ...challenge,
+      progress: userProgressMap.get(challenge.id)?.currentProgress || 0,
+      completed: userProgressMap.get(challenge.id)?.isCompleted || false,
+      claimed: userProgressMap.get(challenge.id)?.claimed || false
+    }));
   }
 
-  async updateProgress(userId: string, challengeId: string, progress: number): Promise<UserChallengeProgress> {
-    const challenge = this.currentChallenges.get(challengeId);
-    if (!challenge) {
-      throw new Error('Challenge not found');
+  public async updateProgress(
+    userId: string,
+    challengeId: string,
+    progress: number
+  ): Promise<ChallengeProgress> {
+    const challenge = this.challenges.get(challengeId);
+    if (!challenge || !challenge.isActive) {
+      throw new Error('Challenge not found or inactive');
     }
 
-    let userChallenges = this.userProgress.get(userId) || [];
-    let userChallenge = userChallenges.find(p => p.challengeId === challengeId);
-
-    if (!userChallenge) {
-      userChallenge = {
-        userId,
-        challengeId,
-        progress: 0,
-        completed: false,
-        claimed: false
-      };
-      userChallenges.push(userChallenge);
+    let userProgressMap = this.userProgress.get(userId);
+    if (!userProgressMap) {
+      userProgressMap = new Map();
+      this.userProgress.set(userId, userProgressMap);
     }
 
-    userChallenge.progress = Math.min(progress, challenge.requirement.target);
-    userChallenge.completed = userChallenge.progress >= challenge.requirement.target;
+    let challengeProgress = userProgressMap.get(challengeId) || {
+      challengeId,
+      currentProgress: 0,
+      isCompleted: false,
+      claimed: false
+    };
 
-    if (userChallenge.completed && !userChallenge.completedAt) {
-      userChallenge.completedAt = new Date();
-      
-      // Update leaderboard
-      this.leaderboardService.updatePlayerScore(userId, 10, 'daily_challenges');
-      
-      // Track progress for achievements
-      this.progressTrackingService.updateProgress(userId, 'daily_challenges_completed', 1);
+    challengeProgress.currentProgress = Math.min(
+      challenge.requirement,
+      challengeProgress.currentProgress + progress
+    );
+
+    if (
+      challengeProgress.currentProgress >= challenge.requirement &&
+      !challengeProgress.isCompleted
+    ) {
+      challengeProgress.isCompleted = true;
+      challengeProgress.completedAt = new Date().toISOString();
+      this.emit('challenge:completed', { userId, challengeId });
     }
 
-    this.userProgress.set(userId, userChallenges);
-    return userChallenge;
+    userProgressMap.set(challengeId, challengeProgress);
+    return challengeProgress;
   }
 
-  async claimRewards(userId: string, challengeId: string): Promise<boolean> {
-    const challenge = this.currentChallenges.get(challengeId);
-    const userChallenges = this.userProgress.get(userId) || [];
-    const userChallenge = userChallenges.find(p => p.challengeId === challengeId);
-
-    if (!challenge || !userChallenge || !userChallenge.completed || userChallenge.claimed) {
-      return false;
+  public async claimReward(
+    userId: string,
+    challengeId: string
+  ): Promise<ChallengeProgress> {
+    const challenge = this.challenges.get(challengeId);
+    if (!challenge || !challenge.isActive) {
+      throw new Error('Challenge not found or inactive');
     }
 
-    userChallenge.claimed = true;
-    this.userProgress.set(userId, userChallenges);
+    const userProgressMap = this.userProgress.get(userId);
+    if (!userProgressMap) {
+      throw new Error('No progress found for user');
+    }
 
-    // Here you would integrate with inventory/reward systems to grant rewards
-    // For now, we'll just return true to indicate successful claim
-    return true;
-  }
+    const progress = userProgressMap.get(challengeId);
+    if (!progress || !progress.isCompleted || progress.claimed) {
+      throw new Error('Cannot claim reward: challenge not completed or already claimed');
+    }
 
-  async getLeaderboard(): Promise<{ userId: string; completedChallenges: number }[]> {
-    // Implementation would depend on LeaderboardService integration
-    return [];
+    progress.claimed = true;
+    progress.claimedAt = new Date().toISOString();
+    userProgressMap.set(challengeId, progress);
+
+    this.emit('reward:claimed', {
+      userId,
+      challengeId,
+      reward: challenge.reward
+    });
+
+    return progress;
   }
 }
-
-export const dailyChallengeService = DailyChallengeService.getInstance(
-  new LeaderboardService(),
-  new ProgressTrackingService(),
-  new AchievementService()
-);
