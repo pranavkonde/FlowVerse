@@ -1,116 +1,184 @@
-export interface Fish {
-  id: string;
-  name: string;
-  description: string;
-  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
-  size: {
-    min: number;
-    max: number;
-  };
-  weight: {
-    min: number;
-    max: number;
-  };
-  season: 'spring' | 'summer' | 'fall' | 'winter' | 'all';
-  timeOfDay: 'any' | 'day' | 'night' | 'dawn' | 'dusk';
-  habitat: 'river' | 'lake' | 'ocean' | 'pond';
-  difficulty: number;
-  value: number;
-  experience: number;
-  catchTime: {
-    min: number;
-    max: number;
-  };
-  requirements: {
-    level: number;
-    rod?: string;
-    bait?: string;
-  };
-  specialEffects?: {
-    type: string;
-    value: number;
-  }[];
-}
-
 export interface FishingSpot {
   id: string;
   name: string;
-  description: string;
+  type: SpotType;
+  difficulty: number;
+  availableFish: Fish[];
+  requiredLevel: number;
+  requiredEquipment: string[];
+  weatherEffects: WeatherEffect[];
+  seasonalBonus: Season[];
   position: { x: number; y: number };
-  habitat: Fish['habitat'];
-  availableFish: string[];
-  maxFishers: number;
-  currentFishers: string[];
-  respawnTime: number;
-  lastRespawn: Date;
-  isActive: boolean;
-  requirements: {
-    level: number;
-    quest?: string;
-    item?: string;
-  };
+  cooldown?: number;
+  lastFished?: string;
 }
 
-export interface FishingSession {
+export interface Fish {
+  id: string;
+  name: string;
+  type: FishType;
+  rarity: FishRarity;
+  size: { min: number; max: number };
+  weight: { min: number; max: number };
+  value: number;
+  season: Season[];
+  timeOfDay: TimeOfDay[];
+  catchDifficulty: number;
+  specialEffects: SpecialEffect[];
+  description: string;
+  imageUrl: string;
+}
+
+export type SpotType =
+  | 'LAKE'
+  | 'RIVER'
+  | 'OCEAN'
+  | 'POND'
+  | 'STREAM'
+  | 'DEEP_SEA'
+  | 'CAVE';
+
+export type FishType =
+  | 'COMMON'
+  | 'PREDATOR'
+  | 'DEEP_WATER'
+  | 'SURFACE'
+  | 'CAVE'
+  | 'LEGENDARY'
+  | 'MAGICAL';
+
+export type FishRarity =
+  | 'COMMON'
+  | 'UNCOMMON'
+  | 'RARE'
+  | 'EPIC'
+  | 'LEGENDARY'
+  | 'MYTHICAL';
+
+export type Season = 'SPRING' | 'SUMMER' | 'FALL' | 'WINTER';
+
+export type TimeOfDay = 'DAWN' | 'DAY' | 'DUSK' | 'NIGHT';
+
+export type WeatherEffect =
+  | 'RAIN'
+  | 'STORM'
+  | 'CLEAR'
+  | 'CLOUDY'
+  | 'WINDY'
+  | 'FOG';
+
+export interface SpecialEffect {
+  type: EffectType;
+  value: number;
+  duration?: number;
+}
+
+export type EffectType =
+  | 'LUCK_BOOST'
+  | 'SKILL_BOOST'
+  | 'VALUE_BOOST'
+  | 'SIZE_BOOST'
+  | 'RARE_CHANCE'
+  | 'DOUBLE_CATCH';
+
+export interface FishingEquipment {
+  id: string;
+  name: string;
+  type: EquipmentType;
+  quality: EquipmentQuality;
+  stats: EquipmentStats;
+  durability: number;
+  maxDurability: number;
+  requirements: {
+    level: number;
+    skill?: string;
+  };
+  specialEffects: SpecialEffect[];
+}
+
+export type EquipmentType =
+  | 'ROD'
+  | 'REEL'
+  | 'LINE'
+  | 'BAIT'
+  | 'LURE'
+  | 'NET'
+  | 'TRAP';
+
+export type EquipmentQuality =
+  | 'BASIC'
+  | 'GOOD'
+  | 'GREAT'
+  | 'RARE'
+  | 'EPIC'
+  | 'LEGENDARY';
+
+export interface EquipmentStats {
+  power: number;
+  accuracy: number;
+  speed: number;
+  luck: number;
+  durability: number;
+}
+
+export interface FishingAttempt {
   id: string;
   userId: string;
   spotId: string;
-  fishId?: string;
-  startTime: Date;
-  endTime?: Date;
-  status: 'casting' | 'waiting' | 'minigame' | 'completed' | 'failed';
+  equipment: {
+    rod?: string;
+    reel?: string;
+    line?: string;
+    bait?: string;
+    lure?: string;
+  };
+  startedAt: string;
+  endedAt?: string;
+  status: AttemptStatus;
   progress: number;
   difficulty: number;
-  rodId?: string;
-  baitId?: string;
-  catchTime?: number;
+  result?: FishingResult;
 }
+
+export type AttemptStatus =
+  | 'CASTING'
+  | 'WAITING'
+  | 'BITING'
+  | 'REELING'
+  | 'COMPLETED'
+  | 'FAILED';
+
+export interface FishingResult {
+  success: boolean;
+  fish?: Fish;
+  size?: number;
+  weight?: number;
+  quality?: CatchQuality;
+  bonus?: {
+    type: string;
+    value: number;
+  };
+  experience: number;
+}
+
+export type CatchQuality =
+  | 'POOR'
+  | 'NORMAL'
+  | 'GOOD'
+  | 'GREAT'
+  | 'PERFECT';
 
 export interface FishingStats {
   totalCatches: number;
-  rarityCount: Record<string, number>;
+  rarityCount: Record<FishRarity, number>;
+  typeCount: Record<FishType, number>;
   biggestCatch: {
-    fishId: string;
+    fish: Fish;
     size: number;
     weight: number;
-    timestamp: Date;
   };
-  favoriteSpot: {
-    spotId: string;
-    visits: number;
-  };
-  skillLevel: number;
-  experience: number;
+  totalValue: number;
+  perfectCatches: number;
+  specialCatches: number;
   achievements: string[];
 }
-
-export const RARITY_COLORS = {
-  common: 'gray',
-  uncommon: 'green',
-  rare: 'blue',
-  epic: 'purple',
-  legendary: 'orange'
-} as const;
-
-export const HABITAT_ICONS = {
-  river: '🌊',
-  lake: '💧',
-  ocean: '🌊',
-  pond: '🎣'
-} as const;
-
-export const TIME_ICONS = {
-  any: '⏰',
-  day: '☀️',
-  night: '🌙',
-  dawn: '🌅',
-  dusk: '🌇'
-} as const;
-
-export const SEASON_ICONS = {
-  spring: '🌸',
-  summer: '☀️',
-  fall: '🍁',
-  winter: '❄️',
-  all: '🗓️'
-} as const;

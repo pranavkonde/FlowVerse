@@ -1,216 +1,246 @@
 import { useState, useEffect } from 'react';
 import {
-  Fish,
   FishingSpot,
-  FishingSession,
-  FishingStats
+  FishingAttempt,
+  FishingStats,
+  Season,
+  TimeOfDay,
+  WeatherEffect
 } from '../types/fishing';
 import { api } from '../services/api';
 
 interface UseFishingResult {
   spots: FishingSpot[];
-  availableFish: Fish[];
+  currentAttempt: FishingAttempt | null;
   stats: FishingStats | null;
+  conditions: {
+    season: Season;
+    time: TimeOfDay;
+    weather: WeatherEffect;
+  } | null;
   loading: boolean;
   error: string | null;
-  startFishing: (spotId: string, rodId?: string, baitId?: string) => Promise<FishingSession>;
-  cast: (sessionId: string) => Promise<void>;
-  hook: (sessionId: string) => Promise<void>;
-  updateMinigame: (sessionId: string, progress: number) => Promise<{ completed: boolean; success: boolean }>;
-  refreshData: () => Promise<void>;
+  startFishing: (
+    spotId: string,
+    equipment?: {
+      rod?: string;
+      reel?: string;
+      line?: string;
+      bait?: string;
+      lure?: string;
+    }
+  ) => Promise<FishingAttempt>;
+  respondToBite: () => Promise<void>;
+  refreshSpots: () => Promise<void>;
 }
 
 export function useFishing(): UseFishingResult {
   const [spots, setSpots] = useState<FishingSpot[]>([]);
-  const [availableFish, setAvailableFish] = useState<Fish[]>([]);
+  const [currentAttempt, setCurrentAttempt] = useState<FishingAttempt | null>(null);
   const [stats, setStats] = useState<FishingStats | null>(null);
+  const [conditions, setConditions] = useState<{
+    season: Season;
+    time: TimeOfDay;
+    weather: WeatherEffect;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const fetchSpots = async () => {
     try {
-      const [spotsResponse, fishResponse, statsResponse] = await Promise.all([
-        api.get('/fishing/spots'),
-        api.get('/fishing/fish'),
-        api.get('/fishing/stats')
-      ]);
-
-      setSpots(spotsResponse.data);
-      setAvailableFish(fishResponse.data);
-      setStats(statsResponse.data);
+      const response = await api.get('/fishing/spots');
+      setSpots(response.data);
       setError(null);
     } catch (err) {
-      setError('Failed to load fishing data');
-      console.error('Error fetching fishing data:', err);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching fishing spots:', err);
+      setError('Failed to load fishing spots');
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const response = await api.get('/fishing/stats');
+      setStats(response.data);
+    } catch (err) {
+      console.error('Error fetching fishing stats:', err);
+    }
+  };
+
+  const fetchConditions = async () => {
+    try {
+      const response = await api.get('/fishing/conditions');
+      setConditions(response.data);
+    } catch (err) {
+      console.error('Error fetching conditions:', err);
     }
   };
 
   const startFishing = async (
     spotId: string,
-    rodId?: string,
-    baitId?: string
-  ): Promise<FishingSession> => {
+    equipment?: {
+      rod?: string;
+      reel?: string;
+      line?: string;
+      bait?: string;
+      lure?: string;
+    }
+  ): Promise<FishingAttempt> => {
     try {
       const response = await api.post('/fishing/start', {
         spotId,
-        rodId,
-        baitId
+        equipment
       });
-
-      // Update spots with new fisher count
-      setSpots(current =>
-        current.map(spot =>
-          spot.id === spotId
-            ? {
-                ...spot,
-                currentFishers: [...spot.currentFishers, 'currentUser'] // Replace with actual user ID
-              }
-            : spot
-        )
-      );
-
-      return response.data;
+      
+      const attempt = response.data;
+      setCurrentAttempt(attempt);
+      return attempt;
     } catch (err) {
       console.error('Error starting fishing:', err);
       throw err;
     }
   };
 
-  const cast = async (sessionId: string): Promise<void> => {
+  const respondToBite = async (): Promise<void> => {
+    if (!currentAttempt) {
+      throw new Error('No active fishing attempt');
+    }
+
     try {
-      await api.post(`/fishing/${sessionId}/cast`);
+      const response = await api.post(
+        `/fishing/attempts/${currentAttempt.id}/respond`
+      );
+      setCurrentAttempt(response.data);
     } catch (err) {
-      console.error('Error casting line:', err);
+      console.error('Error responding to bite:', err);
       throw err;
     }
   };
 
-  const hook = async (sessionId: string): Promise<void> => {
+  const pollAttemptStatus = async (attemptId: string) => {
     try {
-      await api.post(`/fishing/${sessionId}/hook`);
-    } catch (err) {
-      console.error('Error hooking fish:', err);
-      throw err;
-    }
-  };
+      const response = await api.get(`/fishing/attempts/${attemptId}`);
+      const attempt = response.data;
+      setCurrentAttempt(attempt);
 
-  const updateMinigame = async (
-    sessionId: string,
-    progress: number
-  ): Promise<{ completed: boolean; success: boolean }> => {
-    try {
-      const response = await api.post(`/fishing/${sessionId}/minigame`, {
-        progress
-      });
-      return response.data;
+      if (
+        attempt.status !== 'COMPLETED' &&
+        attempt.status !== 'FAILED'
+      ) {
+        setTimeout(() => pollAttemptStatus(attemptId), 500);
+      } else {
+        // Attempt completed, refresh stats
+        fetchStats();
+      }
     } catch (err) {
-      console.error('Error updating minigame:', err);
-      throw err;
+      console.error('Error polling attempt status:', err);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    const loadInitialData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          fetchSpots(),
+          fetchStats(),
+          fetchConditions()
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInitialData();
 
     // Set up WebSocket listeners for real-time updates
     const socket = api.socket;
 
-    socket.on('spotRespawned', (spot: FishingSpot) => {
-      setSpots(current =>
-        current.map(s => (s.id === spot.id ? spot : s))
-      );
-    });
-
-    socket.on('fishingStarted', ({ session, spot }: { session: FishingSession; spot: FishingSpot }) => {
-      setSpots(current =>
-        current.map(s => (s.id === spot.id ? spot : s))
-      );
-    });
-
-    socket.on('fishBit', ({ session, fish }: { session: FishingSession; fish: Fish }) => {
-      // Could add some UI feedback here
-    });
-
-    socket.on('fishingCompleted', ({ session, fish }: { session: FishingSession; fish: Fish }) => {
-      // Update stats
-      if (stats) {
-        setStats({
-          ...stats,
-          totalCatches: stats.totalCatches + 1,
-          rarityCount: {
-            ...stats.rarityCount,
-            [fish.rarity]: (stats.rarityCount[fish.rarity] || 0) + 1
-          }
-        });
-      }
-
-      // Update spot fisher count
-      setSpots(current =>
-        current.map(spot =>
-          spot.id === session.spotId
-            ? {
-                ...spot,
-                currentFishers: spot.currentFishers.filter(
-                  id => id !== session.userId
-                )
-              }
-            : spot
-        )
-      );
-    });
-
-    socket.on('fishingFailed', ({ session }: { session: FishingSession }) => {
-      // Update spot fisher count
-      setSpots(current =>
-        current.map(spot =>
-          spot.id === session.spotId
-            ? {
-                ...spot,
-                currentFishers: spot.currentFishers.filter(
-                  id => id !== session.userId
-                )
-              }
-            : spot
-        )
-      );
-    });
-
-    socket.on('levelUp', ({ userId, level }: { userId: string; level: number }) => {
-      if (stats) {
-        setStats({
-          ...stats,
-          skillLevel: level
-        });
+    socket.on('fishing:status-changed', ({ attemptId, status }) => {
+      if (currentAttempt?.id === attemptId) {
+        setCurrentAttempt(current =>
+          current ? { ...current, status } : null
+        );
       }
     });
 
-    socket.on('statsUpdated', ({ userId, stats: newStats }: { userId: string; stats: FishingStats }) => {
-      setStats(newStats);
+    socket.on('fishing:progress', ({ attemptId, progress }) => {
+      if (currentAttempt?.id === attemptId) {
+        setCurrentAttempt(current =>
+          current ? { ...current, progress } : null
+        );
+      }
+    });
+
+    socket.on('fishing:completed', ({ attemptId, result }) => {
+      if (currentAttempt?.id === attemptId) {
+        setCurrentAttempt(current =>
+          current
+            ? {
+                ...current,
+                status: 'COMPLETED',
+                endedAt: new Date().toISOString(),
+                result
+              }
+            : null
+        );
+        fetchStats();
+      }
+    });
+
+    socket.on('fishing:failed', ({ attemptId }) => {
+      if (currentAttempt?.id === attemptId) {
+        setCurrentAttempt(current =>
+          current
+            ? {
+                ...current,
+                status: 'FAILED',
+                endedAt: new Date().toISOString(),
+                result: { success: false, experience: 1 }
+              }
+            : null
+        );
+      }
+    });
+
+    socket.on('time:changed', ({ time }) => {
+      setConditions(current =>
+        current ? { ...current, time } : null
+      );
+    });
+
+    socket.on('weather:changed', ({ weather }) => {
+      setConditions(current =>
+        current ? { ...current, weather } : null
+      );
+    });
+
+    socket.on('season:changed', ({ season }) => {
+      setConditions(current =>
+        current ? { ...current, season } : null
+      );
+      fetchSpots(); // Refresh spots as available fish may change
     });
 
     return () => {
-      socket.off('spotRespawned');
-      socket.off('fishingStarted');
-      socket.off('fishBit');
-      socket.off('fishingCompleted');
-      socket.off('fishingFailed');
-      socket.off('levelUp');
-      socket.off('statsUpdated');
+      socket.off('fishing:status-changed');
+      socket.off('fishing:progress');
+      socket.off('fishing:completed');
+      socket.off('fishing:failed');
+      socket.off('time:changed');
+      socket.off('weather:changed');
+      socket.off('season:changed');
     };
-  }, []);
+  }, [currentAttempt?.id]);
 
   return {
     spots,
-    availableFish,
+    currentAttempt,
     stats,
+    conditions,
     loading,
     error,
     startFishing,
-    cast,
-    hook,
-    updateMinigame,
-    refreshData: fetchData
+    respondToBite,
+    refreshSpots: fetchSpots
   };
 }
