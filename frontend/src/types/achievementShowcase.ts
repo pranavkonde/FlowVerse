@@ -1,84 +1,100 @@
-export interface Showcase {
+export interface AchievementShowcase {
   id: string;
   userId: string;
   title: string;
   description: string;
   achievements: ShowcaseAchievement[];
-  layout: 'grid' | 'list' | 'timeline';
+  layout: ShowcaseLayout;
   theme: ShowcaseTheme;
-  isPublic: boolean;
+  visibility: ShowcaseVisibility;
   likes: number;
   views: number;
-  createdAt: Date;
-  updatedAt: Date;
+  featured: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ShowcaseAchievement {
   id: string;
-  achievementId: string;
+  name: string;
+  description: string;
+  category: AchievementCategory;
+  rarity: AchievementRarity;
+  icon: string;
+  progress: number;
+  completedAt: string;
   position: { x: number; y: number };
   scale: number;
   rotation: number;
-  customDescription?: string;
-  customStyle?: {
-    borderColor?: string;
-    backgroundColor?: string;
-    glowEffect?: boolean;
-    animation?: string;
-  };
 }
 
-export interface ShowcaseTheme {
+export type AchievementCategory =
+  | 'COMBAT'
+  | 'CRAFTING'
+  | 'EXPLORATION'
+  | 'SOCIAL'
+  | 'COLLECTION'
+  | 'EVENTS'
+  | 'FARMING'
+  | 'FISHING'
+  | 'TRADING'
+  | 'SPECIAL';
+
+export type AchievementRarity =
+  | 'COMMON'
+  | 'UNCOMMON'
+  | 'RARE'
+  | 'EPIC'
+  | 'LEGENDARY'
+  | 'MYTHIC';
+
+export type ShowcaseLayout =
+  | 'GRID'
+  | 'MASONRY'
+  | 'TIMELINE'
+  | 'CAROUSEL'
+  | 'CUSTOM';
+
+export type ShowcaseTheme =
+  | 'DEFAULT'
+  | 'DARK'
+  | 'LIGHT'
+  | 'NEON'
+  | 'RETRO'
+  | 'NATURE'
+  | 'SPACE';
+
+export type ShowcaseVisibility =
+  | 'PUBLIC'
+  | 'FRIENDS'
+  | 'PRIVATE';
+
+export interface ShowcaseStats {
+  totalShowcases: number;
+  totalAchievements: number;
+  rarityDistribution: Record<AchievementRarity, number>;
+  categoryDistribution: Record<AchievementCategory, number>;
+  mostViewedShowcase: string;
+  mostLikedShowcase: string;
+  totalViews: number;
+  totalLikes: number;
+}
+
+export interface ShowcaseComment {
   id: string;
-  name: string;
-  backgroundColor: string;
-  backgroundImage?: string;
-  borderStyle: string;
-  fontFamily: string;
-  primaryColor: string;
-  secondaryColor: string;
-  accentColor: string;
-  effects: {
-    particles?: boolean;
-    glow?: boolean;
-    parallax?: boolean;
-    animation?: string;
-  };
+  showcaseId: string;
+  userId: string;
+  content: string;
+  likes: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export const LAYOUT_OPTIONS = {
-  grid: {
-    label: 'Grid',
-    icon: '▣',
-    description: 'Display achievements in a grid layout'
-  },
-  list: {
-    label: 'List',
-    icon: '☰',
-    description: 'Display achievements in a vertical list'
-  },
-  timeline: {
-    label: 'Timeline',
-    icon: '⟶',
-    description: 'Display achievements in a chronological timeline'
-  }
-} as const;
-
-export const ANIMATION_OPTIONS = {
-  none: 'No Animation',
-  fade: 'Fade In',
-  slide: 'Slide In',
-  bounce: 'Bounce',
-  rotate: 'Rotate',
-  pulse: 'Pulse',
-  shake: 'Shake'
-} as const;
-
-export const BORDER_STYLES = {
-  solid: 'Solid',
-  dashed: 'Dashed',
-  dotted: 'Dotted',
-  double: 'Double',
-  glow: 'Glowing',
-  ornate: 'Ornate'
-} as const;
+export interface ShowcaseFilter {
+  categories?: AchievementCategory[];
+  rarities?: AchievementRarity[];
+  layout?: ShowcaseLayout;
+  theme?: ShowcaseTheme;
+  featured?: boolean;
+  sortBy?: 'recent' | 'popular' | 'likes' | 'views';
+}

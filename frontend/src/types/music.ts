@@ -1,115 +1,204 @@
 export interface Instrument {
   id: string;
   name: string;
-  description: string;
-  type: 'string' | 'wind' | 'percussion' | 'keyboard';
-  soundSet: {
-    notes: {
-      pitch: string;
-      file: string;
-    }[];
-    effects?: {
-      name: string;
-      file: string;
-    }[];
+  type: InstrumentType;
+  category: InstrumentCategory;
+  soundSet: SoundSet;
+  range: {
+    min: number;
+    max: number;
   };
-  playStyle: 'single' | 'chord' | 'sequence';
-  difficulty: number;
-  skillRequirement: number;
-  visualEffects?: {
-    animation: string;
-    particles?: string;
+  tuning: string[];
+  effects: InstrumentEffect[];
+  requirements: {
+    level: number;
+    skill?: string;
+  };
+  stats: InstrumentStats;
+}
+
+export type InstrumentType =
+  | 'PIANO'
+  | 'GUITAR'
+  | 'DRUMS'
+  | 'VIOLIN'
+  | 'FLUTE'
+  | 'HARP'
+  | 'LUTE'
+  | 'HORN'
+  | 'BELLS'
+  | 'MAGICAL';
+
+export type InstrumentCategory =
+  | 'STRINGS'
+  | 'PERCUSSION'
+  | 'WIND'
+  | 'BRASS'
+  | 'KEYBOARD'
+  | 'MAGICAL';
+
+export interface SoundSet {
+  baseUrl: string;
+  format: string;
+  samples: {
+    note: string;
+    url: string;
+    volume?: number;
+    pan?: number;
+  }[];
+  effects?: {
+    name: string;
+    url: string;
+  }[];
+}
+
+export interface InstrumentEffect {
+  type: EffectType;
+  value: number;
+  duration?: number;
+  area?: {
+    radius: number;
+    falloff: number;
   };
 }
 
-export interface MusicScore {
+export type EffectType =
+  | 'HEALING'
+  | 'BUFF'
+  | 'DEBUFF'
+  | 'CHARM'
+  | 'INSPIRE'
+  | 'SOOTHE'
+  | 'ENERGIZE'
+  | 'MAGICAL';
+
+export interface InstrumentStats {
+  power: number;
+  resonance: number;
+  harmony: number;
+  control: number;
+  durability: number;
+}
+
+export interface Performance {
+  id: string;
+  playerId: string;
+  instrumentId: string;
+  song: Song;
+  startedAt: string;
+  endedAt?: string;
+  score?: number;
+  accuracy?: number;
+  combo?: number;
+  effects: PerformanceEffect[];
+  audience: string[];
+  reactions: Reaction[];
+}
+
+export interface Song {
   id: string;
   title: string;
   composer: string;
   difficulty: number;
   duration: number;
-  instruments: string[];
-  notes: {
-    time: number;
-    pitch: string;
-    duration: number;
-    instrument: string;
-    velocity: number;
-  }[];
-  metadata: {
-    genre?: string;
-    tags?: string[];
-    description?: string;
-    thumbnail?: string;
+  bpm: number;
+  notes: Note[];
+  sections: Section[];
+  effects: SongEffect[];
+  requirements: {
+    instrument: InstrumentType[];
+    level: number;
   };
 }
 
-export interface Performance {
-  id: string;
-  userId: string;
-  scoreId: string;
-  instrumentId: string;
-  startTime: Date;
-  endTime?: Date;
-  accuracy: number;
-  rating: number;
-  listeners: string[];
-  reactions: {
-    userId: string;
-    type: string;
-    timestamp: Date;
-  }[];
+export interface Note {
+  time: number;
+  pitch: string;
+  duration: number;
+  velocity: number;
+  effects?: NoteEffect[];
 }
+
+export interface Section {
+  name: string;
+  startTime: number;
+  endTime: number;
+  type: SectionType;
+  effects?: SectionEffect[];
+}
+
+export type SectionType =
+  | 'INTRO'
+  | 'VERSE'
+  | 'CHORUS'
+  | 'BRIDGE'
+  | 'SOLO'
+  | 'OUTRO';
+
+export interface SongEffect {
+  type: EffectType;
+  value: number;
+  startTime: number;
+  duration: number;
+  area?: {
+    radius: number;
+    falloff: number;
+  };
+}
+
+export interface NoteEffect {
+  type: string;
+  value: number;
+}
+
+export interface SectionEffect {
+  type: string;
+  value: number;
+}
+
+export interface PerformanceEffect {
+  type: EffectType;
+  value: number;
+  targetId?: string;
+  startTime: number;
+  duration: number;
+}
+
+export interface Reaction {
+  userId: string;
+  type: ReactionType;
+  timestamp: string;
+}
+
+export type ReactionType =
+  | 'APPLAUSE'
+  | 'CHEER'
+  | 'DANCE'
+  | 'ENCORE'
+  | 'TIP';
 
 export interface MusicianStats {
   totalPerformances: number;
+  instrumentsPlayed: Record<InstrumentType, number>;
+  songsLearned: number;
+  highestCombo: number;
   averageAccuracy: number;
-  bestRating: number;
-  totalListeners: number;
-  instrumentMastery: Record<string, number>;
-  favoriteInstrument?: string;
-  performanceHistory: {
-    scoreId: string;
-    accuracy: number;
-    rating: number;
-    timestamp: Date;
-  }[];
+  totalPlaytime: number;
+  audienceReached: number;
+  effectsTriggered: number;
+  specialAchievements: string[];
 }
 
-export const INSTRUMENT_TYPE_ICONS = {
-  string: '🎸',
-  wind: '🎺',
-  percussion: '🥁',
-  keyboard: '🎹'
-} as const;
-
-export const INSTRUMENT_DIFFICULTY_LABELS = {
-  1: 'Beginner',
-  2: 'Easy',
-  3: 'Novice',
-  4: 'Intermediate',
-  5: 'Skilled',
-  6: 'Advanced',
-  7: 'Expert',
-  8: 'Master',
-  9: 'Virtuoso',
-  10: 'Legendary'
-} as const;
-
-export const REACTION_TYPES = {
-  applause: '👏',
-  bravo: '🎭',
-  encore: '⭐',
-  amazing: '🌟',
-  beautiful: '🎵',
-  wow: '😮',
-  love: '❤️'
-} as const;
-
-export const MASTERY_LEVELS = {
-  novice: { min: 0, max: 20, color: 'gray' },
-  apprentice: { min: 21, max: 40, color: 'green' },
-  adept: { min: 41, max: 60, color: 'blue' },
-  expert: { min: 61, max: 80, color: 'purple' },
-  master: { min: 81, max: 100, color: 'orange' }
-} as const;
+export interface MusicSettings {
+  volume: {
+    master: number;
+    instruments: number;
+    effects: number;
+    ambient: number;
+  };
+  visualEffects: boolean;
+  showNoteNames: boolean;
+  showTiming: boolean;
+  inputLatency: number;
+  midiEnabled: boolean;
+}

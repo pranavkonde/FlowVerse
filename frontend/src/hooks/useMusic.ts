@@ -1,253 +1,386 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Instrument,
-  MusicScore,
+  Song,
   Performance,
-  MusicianStats
+  MusicianStats,
+  ReactionType,
+  EffectType,
+  MusicSettings
 } from '../types/music';
 import { api } from '../services/api';
 
 interface UseMusicResult {
   instruments: Instrument[];
-  scores: MusicScore[];
-  activePerformances: Performance[];
+  songs: Song[];
+  currentPerformance: Performance | null;
   stats: MusicianStats | null;
+  settings: MusicSettings;
   loading: boolean;
   error: string | null;
-  startPerformance: (scoreId: string, instrumentId: string) => Promise<Performance>;
-  playNote: (performanceId: string, note: { pitch: string; velocity: number; timestamp: number }) => Promise<void>;
-  endPerformance: (performanceId: string) => Promise<void>;
-  listenToPerformance: (performanceId: string) => Promise<void>;
-  addReaction: (performanceId: string, type: string) => Promise<void>;
+  audioContext: AudioContext | null;
+  startPerformance: (instrumentId: string, songId: string) => Promise<void>;
+  endPerformance: (stats: {
+    score: number;
+    accuracy: number;
+    combo: number;
+  }) => Promise<void>;
+  playNote: (note: string, duration?: number) => Promise<void>;
+  addReaction: (type: ReactionType) => Promise<void>;
+  joinAudience: (performanceId: string) => Promise<void>;
+  addEffect: (effect: {
+    type: EffectType;
+    value: number;
+    targetId?: string;
+    duration: number;
+  }) => Promise<void>;
+  updateSettings: (newSettings: Partial<MusicSettings>) => void;
   refreshData: () => Promise<void>;
 }
 
+const DEFAULT_SETTINGS: MusicSettings = {
+  volume: {
+    master: 1,
+    instruments: 0.8,
+    effects: 0.6,
+    ambient: 0.4
+  },
+  visualEffects: true,
+  showNoteNames: true,
+  showTiming: true,
+  inputLatency: 0,
+  midiEnabled: false
+};
+
 export function useMusic(): UseMusicResult {
   const [instruments, setInstruments] = useState<Instrument[]>([]);
-  const [scores, setScores] = useState<MusicScore[]>([]);
-  const [activePerformances, setActivePerformances] = useState<Performance[]>([]);
+  const [songs, setSongs] = useState<Song[]>([]);
+  const [currentPerformance, setCurrentPerformance] = useState<Performance | null>(null);
   const [stats, setStats] = useState<MusicianStats | null>(null);
+  const [settings, setSettings] = useState<MusicSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
-    try {
-      const [
-        instrumentsResponse,
-        scoresResponse,
-        performancesResponse,
-        statsResponse
-      ] = await Promise.all([
-        api.get('/music/instruments'),
-        api.get('/music/scores'),
-        api.get('/music/performances/active'),
-        api.get('/music/stats')
-      ]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const soundBuffersRef = useRef<Map<string, AudioBuffer>>(new Map());
+  const activeSourcesRef = useRef<Map<string, AudioBufferSourceNode>>(new Map());
 
-      setInstruments(instrumentsResponse.data);
-      setScores(scoresResponse.data);
-      setActivePerformances(performancesResponse.data);
-      setStats(statsResponse.data);
+  useEffect(() => {
+    // Initialize AudioContext
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+    }
+  }, []);
+
+  const fetchInstruments = async () => {
+    try {
+      const response = await api.get('/music/instruments');
+      setInstruments(response.data);
       setError(null);
     } catch (err) {
-      setError('Failed to load music data');
-      console.error('Error fetching music data:', err);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching instruments:', err);
+      setError('Failed to load instruments');
     }
   };
 
+  const fetchSongs = async () => {
+    try {
+      const response = await api.get('/music/songs');
+      setSongs(response.data);
+    } catch (err) {
+      console.error('Error fetching songs:', err);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const response = await api.get('/music/stats');
+      setStats(response.data);
+    } catch (err) {
+      console.error('Error fetching music stats:', err);
+    }
+  };
+
+  const loadSoundBuffer = async (url: string): Promise<AudioBuffer> => {
+    if (soundBuffersRef.current.has(url)) {
+      return soundBuffersRef.current.get(url)!;
+    }
+
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = await audioContextRef.current!.decodeAudioData(arrayBuffer);
+    soundBuffersRef.current.set(url, audioBuffer);
+    return audioBuffer;
+  };
+
   const startPerformance = async (
-    scoreId: string,
-    instrumentId: string
-  ): Promise<Performance> => {
+    instrumentId: string,
+    songId: string
+  ): Promise<void> => {
     try {
       const response = await api.post('/music/performances', {
-        scoreId,
-        instrumentId
+        instrumentId,
+        songId
       });
+      
       const performance = response.data;
+      setCurrentPerformance(performance);
 
-      setActivePerformances(current => [...current, performance]);
-      return performance;
+      // Preload instrument sounds
+      const instrument = instruments.find(i => i.id === instrumentId);
+      if (instrument) {
+        await Promise.all(
+          instrument.soundSet.samples.map(sample =>
+            loadSoundBuffer(instrument.soundSet.baseUrl + sample.url)
+          )
+        );
+      }
     } catch (err) {
       console.error('Error starting performance:', err);
       throw err;
     }
   };
 
-  const playNote = async (
-    performanceId: string,
-    note: { pitch: string; velocity: number; timestamp: number }
-  ) => {
-    try {
-      await api.post(`/music/performances/${performanceId}/notes`, note);
-    } catch (err) {
-      console.error('Error playing note:', err);
-      throw err;
+  const endPerformance = async (stats: {
+    score: number;
+    accuracy: number;
+    combo: number;
+  }): Promise<void> => {
+    if (!currentPerformance) {
+      throw new Error('No active performance');
     }
-  };
 
-  const endPerformance = async (performanceId: string) => {
     try {
-      await api.post(`/music/performances/${performanceId}/end`);
-      setActivePerformances(current =>
-        current.filter(p => p.id !== performanceId)
+      const response = await api.post(
+        `/music/performances/${currentPerformance.id}/end`,
+        stats
       );
+      setCurrentPerformance(response.data);
+      await fetchStats();
     } catch (err) {
       console.error('Error ending performance:', err);
       throw err;
     }
   };
 
-  const listenToPerformance = async (performanceId: string) => {
+  const playNote = async (
+    note: string,
+    duration: number = 1000
+  ): Promise<void> => {
+    if (!currentPerformance || !audioContextRef.current) return;
+
+    const instrument = instruments.find(
+      i => i.id === currentPerformance.instrumentId
+    );
+    if (!instrument) return;
+
+    const sample = instrument.soundSet.samples.find(s => s.note === note);
+    if (!sample) return;
+
     try {
-      await api.post(`/music/performances/${performanceId}/listen`);
-      setActivePerformances(current =>
-        current.map(performance =>
-          performance.id === performanceId
-            ? {
-                ...performance,
-                listeners: [...performance.listeners, 'currentUser'] // Replace with actual user ID
-              }
-            : performance
-        )
+      const buffer = await loadSoundBuffer(
+        instrument.soundSet.baseUrl + sample.url
       );
+
+      // Stop previous note if it exists
+      const previousSource = activeSourcesRef.current.get(note);
+      if (previousSource) {
+        previousSource.stop();
+        activeSourcesRef.current.delete(note);
+      }
+
+      // Create and configure source
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = buffer;
+
+      // Create gain node for volume control
+      const gainNode = audioContextRef.current.createGain();
+      gainNode.gain.value = settings.volume.instruments;
+
+      // Connect nodes
+      source.connect(gainNode);
+      gainNode.connect(audioContextRef.current.destination);
+
+      // Start playback
+      source.start();
+      activeSourcesRef.current.set(note, source);
+
+      // Stop after duration
+      setTimeout(() => {
+        source.stop();
+        activeSourcesRef.current.delete(note);
+      }, duration);
     } catch (err) {
-      console.error('Error listening to performance:', err);
-      throw err;
+      console.error('Error playing note:', err);
     }
   };
 
-  const addReaction = async (performanceId: string, type: string) => {
+  const addReaction = async (type: ReactionType): Promise<void> => {
+    if (!currentPerformance) {
+      throw new Error('No active performance');
+    }
+
     try {
-      await api.post(`/music/performances/${performanceId}/reactions`, { type });
-      setActivePerformances(current =>
-        current.map(performance =>
-          performance.id === performanceId
-            ? {
-                ...performance,
-                reactions: [
-                  ...performance.reactions,
-                  {
-                    userId: 'currentUser', // Replace with actual user ID
-                    type,
-                    timestamp: new Date()
-                  }
-                ]
-              }
-            : performance
-        )
+      const response = await api.post(
+        `/music/performances/${currentPerformance.id}/reactions`,
+        { type }
       );
+      setCurrentPerformance(response.data);
     } catch (err) {
       console.error('Error adding reaction:', err);
       throw err;
     }
   };
 
+  const joinAudience = async (performanceId: string): Promise<void> => {
+    try {
+      const response = await api.post(
+        `/music/performances/${performanceId}/audience`
+      );
+      setCurrentPerformance(response.data);
+    } catch (err) {
+      console.error('Error joining audience:', err);
+      throw err;
+    }
+  };
+
+  const addEffect = async (effect: {
+    type: EffectType;
+    value: number;
+    targetId?: string;
+    duration: number;
+  }): Promise<void> => {
+    if (!currentPerformance) {
+      throw new Error('No active performance');
+    }
+
+    try {
+      const response = await api.post(
+        `/music/performances/${currentPerformance.id}/effects`,
+        { effect }
+      );
+      setCurrentPerformance(response.data);
+    } catch (err) {
+      console.error('Error adding effect:', err);
+      throw err;
+    }
+  };
+
+  const updateSettings = (newSettings: Partial<MusicSettings>): void => {
+    setSettings(current => ({
+      ...current,
+      ...newSettings
+    }));
+  };
+
+  const refreshData = async (): Promise<void> => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        fetchInstruments(),
+        fetchSongs(),
+        fetchStats()
+      ]);
+      setError(null);
+    } catch (err) {
+      setError('Failed to refresh music data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchData();
+    refreshData();
 
     // Set up WebSocket listeners for real-time updates
     const socket = api.socket;
 
-    socket.on('performanceStarted', (performance: Performance) => {
-      setActivePerformances(current => [...current, performance]);
+    socket.on('performance:started', ({ performanceId }) => {
+      if (currentPerformance?.id === performanceId) {
+        fetchStats();
+      }
     });
 
-    socket.on('notePlayed', ({
-      performanceId,
-      note,
-      accuracy
-    }: {
-      performanceId: string;
-      note: { pitch: string; velocity: number; timestamp: number };
-      accuracy: number;
-    }) => {
-      setActivePerformances(current =>
-        current.map(performance =>
-          performance.id === performanceId
-            ? { ...performance, accuracy }
-            : performance
-        )
-      );
-
-      // Play the note sound
-      const audio = new Audio(`/assets/sounds/${note.pitch}.mp3`);
-      audio.volume = note.velocity / 100;
-      audio.play();
+    socket.on('performance:ended', ({ performanceId }) => {
+      if (currentPerformance?.id === performanceId) {
+        setCurrentPerformance(null);
+        fetchStats();
+      }
     });
 
-    socket.on('performanceEnded', (performance: Performance) => {
-      setActivePerformances(current =>
-        current.filter(p => p.id !== performance.id)
-      );
+    socket.on('performance:reaction', ({ performanceId, userId, type }) => {
+      if (currentPerformance?.id === performanceId) {
+        setCurrentPerformance(current => {
+          if (!current) return null;
+          return {
+            ...current,
+            reactions: [
+              ...current.reactions,
+              { userId, type, timestamp: new Date().toISOString() }
+            ]
+          };
+        });
+      }
     });
 
-    socket.on('listenerJoined', ({
-      performanceId,
-      listenerId
-    }: {
-      performanceId: string;
-      listenerId: string;
-    }) => {
-      setActivePerformances(current =>
-        current.map(performance =>
-          performance.id === performanceId
-            ? {
-                ...performance,
-                listeners: [...performance.listeners, listenerId]
-              }
-            : performance
-        )
-      );
+    socket.on('performance:audience-joined', ({ performanceId, userId }) => {
+      if (currentPerformance?.id === performanceId) {
+        setCurrentPerformance(current => {
+          if (!current) return null;
+          return {
+            ...current,
+            audience: [...current.audience, userId]
+          };
+        });
+      }
     });
 
-    socket.on('reactionAdded', ({
-      performanceId,
-      reaction
-    }: {
-      performanceId: string;
-      reaction: { userId: string; type: string; timestamp: Date };
-    }) => {
-      setActivePerformances(current =>
-        current.map(performance =>
-          performance.id === performanceId
-            ? {
-                ...performance,
-                reactions: [...performance.reactions, reaction]
-              }
-            : performance
-        )
-      );
+    socket.on('performance:effect-added', ({ performanceId, effect }) => {
+      if (currentPerformance?.id === performanceId) {
+        setCurrentPerformance(current => {
+          if (!current) return null;
+          return {
+            ...current,
+            effects: [...current.effects, effect]
+          };
+        });
+      }
     });
 
-    socket.on('statsUpdated', ({ stats: newStats }: { stats: MusicianStats }) => {
-      setStats(newStats);
+    socket.on('achievement:unlocked', ({ achievement }) => {
+      fetchStats();
     });
 
     return () => {
-      socket.off('performanceStarted');
-      socket.off('notePlayed');
-      socket.off('performanceEnded');
-      socket.off('listenerJoined');
-      socket.off('reactionAdded');
-      socket.off('statsUpdated');
+      socket.off('performance:started');
+      socket.off('performance:ended');
+      socket.off('performance:reaction');
+      socket.off('performance:audience-joined');
+      socket.off('performance:effect-added');
+      socket.off('achievement:unlocked');
+
+      // Clean up audio resources
+      activeSourcesRef.current.forEach(source => source.stop());
+      activeSourcesRef.current.clear();
     };
-  }, []);
+  }, [currentPerformance?.id]);
 
   return {
     instruments,
-    scores,
-    activePerformances,
+    songs,
+    currentPerformance,
     stats,
+    settings,
     loading,
     error,
+    audioContext: audioContextRef.current,
     startPerformance,
-    playNote,
     endPerformance,
-    listenToPerformance,
+    playNote,
     addReaction,
-    refreshData: fetchData
+    joinAudience,
+    addEffect,
+    updateSettings,
+    refreshData
   };
 }

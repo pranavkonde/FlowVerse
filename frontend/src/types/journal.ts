@@ -1,86 +1,134 @@
 export interface JournalEntry {
   id: string;
   userId: string;
-  type: 'achievement' | 'quest' | 'milestone' | 'discovery' | 'note' | 'combat' | 'crafting' | 'trading';
   title: string;
-  description: string;
-  timestamp: Date;
-  category: string;
+  content: string;
+  category: JournalCategory;
   tags: string[];
-  metadata: {
-    progress?: number;
-    location?: string;
-    participants?: string[];
-    rewards?: {
-      type: string;
-      amount: number;
-    }[];
-    screenshots?: string[];
-    linkedEntries?: string[];
-    customFields?: Record<string, any>;
-  };
-  isHidden: boolean;
+  attachments: JournalAttachment[];
+  linkedEntities: LinkedEntity[];
+  createdAt: string;
+  updatedAt: string;
   isPinned: boolean;
+  isPrivate: boolean;
+  mood?: string;
+  location?: string;
+  weather?: string;
 }
+
+export type JournalCategory =
+  | 'QUEST'
+  | 'ACHIEVEMENT'
+  | 'COMBAT'
+  | 'CRAFTING'
+  | 'EXPLORATION'
+  | 'SOCIAL'
+  | 'TRADING'
+  | 'FARMING'
+  | 'FISHING'
+  | 'PERSONAL'
+  | 'NOTE';
+
+export interface JournalAttachment {
+  id: string;
+  type: AttachmentType;
+  url: string;
+  thumbnail?: string;
+  description?: string;
+}
+
+export type AttachmentType =
+  | 'IMAGE'
+  | 'SCREENSHOT'
+  | 'ITEM'
+  | 'ACHIEVEMENT'
+  | 'LOCATION'
+  | 'COMBAT_LOG'
+  | 'TRADE_RECORD';
+
+export interface LinkedEntity {
+  id: string;
+  type: EntityType;
+  name: string;
+  icon?: string;
+  url?: string;
+}
+
+export type EntityType =
+  | 'PLAYER'
+  | 'NPC'
+  | 'ITEM'
+  | 'LOCATION'
+  | 'QUEST'
+  | 'ACHIEVEMENT'
+  | 'MONSTER'
+  | 'EVENT';
 
 export interface JournalCollection {
   id: string;
   userId: string;
   name: string;
   description: string;
+  icon: string;
+  color: string;
   entries: string[];
   isDefault: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface JournalStats {
   totalEntries: number;
-  entriesByType: Record<string, number>;
-  entriesByCategory: Record<string, number>;
+  entriesByCategory: Record<JournalCategory, number>;
+  totalCollections: number;
   mostUsedTags: { tag: string; count: number }[];
-  lastEntryDate?: Date;
-  streakDays: number;
+  mostLinkedEntities: { type: EntityType; count: number }[];
+  averageEntriesPerDay: number;
+  longestStreak: number;
+  currentStreak: number;
 }
 
-export const ENTRY_TYPE_ICONS = {
-  achievement: '🏆',
-  quest: '📜',
-  milestone: '🎯',
-  discovery: '🔍',
-  note: '📝',
-  combat: '⚔️',
-  crafting: '⚒️',
-  trading: '💰'
-} as const;
+export interface JournalSearch {
+  query: string;
+  categories?: JournalCategory[];
+  tags?: string[];
+  collections?: string[];
+  dateRange?: {
+    start: string;
+    end: string;
+  };
+  entityTypes?: EntityType[];
+  sortBy?: 'date' | 'title' | 'category';
+  sortOrder?: 'asc' | 'desc';
+}
 
-export const ENTRY_TYPE_COLORS = {
-  achievement: 'yellow',
-  quest: 'blue',
-  milestone: 'green',
-  discovery: 'purple',
-  note: 'gray',
-  combat: 'red',
-  crafting: 'orange',
-  trading: 'teal'
-} as const;
+export interface JournalTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: JournalCategory;
+  content: string;
+  defaultTags: string[];
+  placeholders: {
+    key: string;
+    description: string;
+    type: 'text' | 'number' | 'date' | 'entity';
+    required: boolean;
+  }[];
+}
 
-export const DEFAULT_CATEGORIES = [
-  'General',
-  'Adventures',
-  'Achievements',
-  'Combat',
-  'Crafting',
-  'Trading',
-  'Social',
-  'Exploration'
-] as const;
-
-export const REWARD_TYPE_ICONS = {
-  tokens: '🪙',
-  experience: '⭐',
-  item: '📦',
-  title: '👑',
-  skill: '📚',
-  reputation: '👥'
-} as const;
+export interface JournalFilter {
+  categories?: JournalCategory[];
+  tags?: string[];
+  collections?: string[];
+  dateRange?: {
+    start: string;
+    end: string;
+  };
+  entityTypes?: EntityType[];
+  searchText?: string;
+  isPinned?: boolean;
+  isPrivate?: boolean;
+  sortBy?: 'date' | 'title' | 'category';
+  sortOrder?: 'asc' | 'desc';
+}

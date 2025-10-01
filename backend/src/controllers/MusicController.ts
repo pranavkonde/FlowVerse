@@ -1,187 +1,159 @@
 import { Request, Response } from 'express';
-import { musicService } from '../services/MusicService';
+import { MusicService } from '../services/MusicService';
 
 export class MusicController {
-  async startPerformance(req: Request, res: Response) {
+  private musicService: MusicService;
+
+  constructor(musicService: MusicService) {
+    this.musicService = musicService;
+  }
+
+  public async getInstruments(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
-      const { scoreId, instrumentId } = req.body;
-      if (!scoreId || !instrumentId) {
-        return res.status(400).json({ error: 'Score ID and instrument ID are required' });
-      }
-
-      try {
-        const performance = await musicService.startPerformance(
-          userId,
-          scoreId,
-          instrumentId
-        );
-        return res.json(performance);
-      } catch (err) {
-        return res.status(400).json({ error: err.message });
-      }
+      const instruments = await this.musicService.getInstruments();
+      res.json(instruments);
     } catch (error) {
-      console.error('Error starting performance:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch instruments' });
     }
   }
 
-  async playNote(req: Request, res: Response) {
+  public async getSongs(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
-      const { performanceId } = req.params;
-      const { pitch, velocity, timestamp } = req.body;
-      if (!performanceId || !pitch || typeof velocity !== 'number' || typeof timestamp !== 'number') {
-        return res.status(400).json({ error: 'Invalid note data' });
-      }
-
-      try {
-        await musicService.playNote(performanceId, { pitch, velocity, timestamp });
-        return res.json({ success: true });
-      } catch (err) {
-        return res.status(400).json({ error: err.message });
-      }
+      const songs = await this.musicService.getSongs();
+      res.json(songs);
     } catch (error) {
-      console.error('Error playing note:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch songs' });
     }
   }
 
-  async endPerformance(req: Request, res: Response) {
+  public async startPerformance(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const userId = req.user.id;
+      const { instrumentId, songId } = req.body;
+
+      if (!instrumentId || !songId) {
+        res.status(400).json({ error: 'Instrument ID and Song ID are required' });
+        return;
       }
 
-      const { performanceId } = req.params;
-      if (!performanceId) {
-        return res.status(400).json({ error: 'Performance ID is required' });
-      }
-
-      try {
-        const performance = await musicService.endPerformance(performanceId);
-        return res.json(performance);
-      } catch (err) {
-        return res.status(400).json({ error: err.message });
-      }
+      const performance = await this.musicService.startPerformance(
+        userId,
+        instrumentId,
+        songId
+      );
+      res.json(performance);
     } catch (error) {
-      console.error('Error ending performance:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to start performance' });
     }
   }
 
-  async listenToPerformance(req: Request, res: Response) {
+  public async endPerformance(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const { performanceId, stats } = req.body;
+
+      if (!performanceId || !stats) {
+        res.status(400).json({ error: 'Performance ID and stats are required' });
+        return;
       }
 
-      const { performanceId } = req.params;
-      if (!performanceId) {
-        return res.status(400).json({ error: 'Performance ID is required' });
-      }
-
-      try {
-        await musicService.listenToPerformance(performanceId, userId);
-        return res.json({ success: true });
-      } catch (err) {
-        return res.status(400).json({ error: err.message });
-      }
+      const performance = await this.musicService.endPerformance(
+        performanceId,
+        stats
+      );
+      res.json(performance);
     } catch (error) {
-      console.error('Error listening to performance:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to end performance' });
     }
   }
 
-  async addReaction(req: Request, res: Response) {
+  public async addReaction(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
+      const userId = req.user.id;
+      const { performanceId, type } = req.body;
 
-      const { performanceId } = req.params;
-      const { type } = req.body;
       if (!performanceId || !type) {
-        return res.status(400).json({ error: 'Performance ID and reaction type are required' });
+        res.status(400).json({ error: 'Performance ID and reaction type are required' });
+        return;
       }
 
-      try {
-        await musicService.addReaction(performanceId, userId, type);
-        return res.json({ success: true });
-      } catch (err) {
-        return res.status(400).json({ error: err.message });
-      }
+      const performance = await this.musicService.addReaction(
+        performanceId,
+        userId,
+        type
+      );
+      res.json(performance);
     } catch (error) {
-      console.error('Error adding reaction:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to add reaction' });
     }
   }
 
-  async getAvailableInstruments(req: Request, res: Response) {
+  public async addAudienceMember(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const userId = req.user.id;
+      const { performanceId } = req.params;
+
+      if (!performanceId) {
+        res.status(400).json({ error: 'Performance ID is required' });
+        return;
       }
 
-      const instruments = await musicService.getAvailableInstruments(userId);
-      return res.json(instruments);
+      const performance = await this.musicService.addAudienceMember(
+        performanceId,
+        userId
+      );
+      res.json(performance);
     } catch (error) {
-      console.error('Error getting available instruments:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to join audience' });
     }
   }
 
-  async getAvailableScores(req: Request, res: Response) {
+  public async addEffect(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const { performanceId, effect } = req.body;
+
+      if (!performanceId || !effect) {
+        res.status(400).json({ error: 'Performance ID and effect details are required' });
+        return;
       }
 
-      const scores = await musicService.getAvailableScores(userId);
-      return res.json(scores);
+      const performance = await this.musicService.addEffect(
+        performanceId,
+        effect
+      );
+      res.json(performance);
     } catch (error) {
-      console.error('Error getting available scores:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to add effect' });
     }
   }
 
-  async getActivePerformances(req: Request, res: Response) {
+  public async getPerformance(req: Request, res: Response): Promise<void> {
     try {
-      const performances = await musicService.getActivePerformances();
-      return res.json(performances);
+      const { performanceId } = req.params;
+
+      if (!performanceId) {
+        res.status(400).json({ error: 'Performance ID is required' });
+        return;
+      }
+
+      const performance = await this.musicService.getPerformance(performanceId);
+      if (!performance) {
+        res.status(404).json({ error: 'Performance not found' });
+        return;
+      }
+
+      res.json(performance);
     } catch (error) {
-      console.error('Error getting active performances:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch performance' });
     }
   }
 
-  async getStats(req: Request, res: Response) {
+  public async getUserStats(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
-      const stats = await musicService.getStats(userId);
-      return res.json(stats);
+      const userId = req.user.id;
+      const stats = await this.musicService.getUserStats(userId);
+      res.json(stats);
     } catch (error) {
-      console.error('Error getting music stats:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch user stats' });
     }
   }
 }
-
-export const musicController = new MusicController();

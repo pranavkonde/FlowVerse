@@ -1,543 +1,366 @@
 import { EventEmitter } from 'events';
-
-export interface Instrument {
-  id: string;
-  name: string;
-  description: string;
-  type: 'string' | 'wind' | 'percussion' | 'keyboard';
-  soundSet: {
-    notes: {
-      pitch: string;
-      file: string;
-    }[];
-    effects?: {
-      name: string;
-      file: string;
-    }[];
-  };
-  playStyle: 'single' | 'chord' | 'sequence';
-  difficulty: number; // 1-10
-  skillRequirement: number;
-  visualEffects?: {
-    animation: string;
-    particles?: string;
-  };
-}
-
-export interface MusicScore {
-  id: string;
-  title: string;
-  composer: string;
-  difficulty: number;
-  duration: number;
-  instruments: string[];
-  notes: {
-    time: number;
-    pitch: string;
-    duration: number;
-    instrument: string;
-    velocity: number;
-  }[];
-  metadata: {
-    genre?: string;
-    tags?: string[];
-    description?: string;
-    thumbnail?: string;
-  };
-}
-
-export interface Performance {
-  id: string;
-  userId: string;
-  scoreId: string;
-  instrumentId: string;
-  startTime: Date;
-  endTime?: Date;
-  accuracy: number;
-  rating: number;
-  listeners: string[];
-  reactions: {
-    userId: string;
-    type: string;
-    timestamp: Date;
-  }[];
-}
-
-export interface MusicianStats {
-  totalPerformances: number;
-  averageAccuracy: number;
-  bestRating: number;
-  totalListeners: number;
-  instrumentMastery: Record<string, number>;
-  favoriteInstrument?: string;
-  performanceHistory: {
-    scoreId: string;
-    accuracy: number;
-    rating: number;
-    timestamp: Date;
-  }[];
-}
+import {
+  Instrument,
+  Song,
+  Performance,
+  MusicianStats,
+  InstrumentType,
+  EffectType,
+  ReactionType
+} from '../types/music';
 
 export class MusicService extends EventEmitter {
-  private static instance: MusicService;
   private instruments: Map<string, Instrument> = new Map();
-  private scores: Map<string, MusicScore> = new Map();
+  private songs: Map<string, Song> = new Map();
   private performances: Map<string, Performance> = new Map();
   private userStats: Map<string, MusicianStats> = new Map();
-  private activePerformers: Map<string, string> = new Map(); // userId -> performanceId
 
-  private readonly DEFAULT_INSTRUMENTS: Instrument[] = [
-    {
-      id: 'acoustic_guitar',
-      name: 'Acoustic Guitar',
-      description: 'A classic wooden guitar with warm, rich tones',
-      type: 'string',
-      soundSet: {
-        notes: [
-          { pitch: 'E2', file: 'guitar_e2.mp3' },
-          { pitch: 'A2', file: 'guitar_a2.mp3' },
-          { pitch: 'D3', file: 'guitar_d3.mp3' },
-          { pitch: 'G3', file: 'guitar_g3.mp3' },
-          { pitch: 'B3', file: 'guitar_b3.mp3' },
-          { pitch: 'E4', file: 'guitar_e4.mp3' }
-        ],
-        effects: [
-          { name: 'strum', file: 'guitar_strum.mp3' },
-          { name: 'harmonic', file: 'guitar_harmonic.mp3' }
-        ]
-      },
-      playStyle: 'chord',
-      difficulty: 3,
-      skillRequirement: 1,
-      visualEffects: {
-        animation: 'guitar_play',
-        particles: 'music_notes'
-      }
-    },
-    {
-      id: 'flute',
-      name: 'Wooden Flute',
-      description: 'A delicate wind instrument with a pure, airy sound',
-      type: 'wind',
-      soundSet: {
-        notes: [
-          { pitch: 'C4', file: 'flute_c4.mp3' },
-          { pitch: 'D4', file: 'flute_d4.mp3' },
-          { pitch: 'E4', file: 'flute_e4.mp3' },
-          { pitch: 'F4', file: 'flute_f4.mp3' },
-          { pitch: 'G4', file: 'flute_g4.mp3' },
-          { pitch: 'A4', file: 'flute_a4.mp3' },
-          { pitch: 'B4', file: 'flute_b4.mp3' },
-          { pitch: 'C5', file: 'flute_c5.mp3' }
-        ]
-      },
-      playStyle: 'single',
-      difficulty: 4,
-      skillRequirement: 2,
-      visualEffects: {
-        animation: 'flute_play',
-        particles: 'wind_notes'
-      }
-    },
-    {
-      id: 'drums',
-      name: 'Drum Set',
-      description: 'A complete set of percussion instruments',
-      type: 'percussion',
-      soundSet: {
-        notes: [
-          { pitch: 'kick', file: 'drums_kick.mp3' },
-          { pitch: 'snare', file: 'drums_snare.mp3' },
-          { pitch: 'hihat', file: 'drums_hihat.mp3' },
-          { pitch: 'crash', file: 'drums_crash.mp3' },
-          { pitch: 'tom1', file: 'drums_tom1.mp3' },
-          { pitch: 'tom2', file: 'drums_tom2.mp3' }
-        ],
-        effects: [
-          { name: 'roll', file: 'drums_roll.mp3' }
-        ]
-      },
-      playStyle: 'sequence',
-      difficulty: 5,
-      skillRequirement: 3,
-      visualEffects: {
-        animation: 'drums_play',
-        particles: 'impact_notes'
-      }
-    },
-    {
-      id: 'piano',
-      name: 'Grand Piano',
-      description: 'A majestic keyboard instrument with rich, dynamic sound',
-      type: 'keyboard',
-      soundSet: {
-        notes: [
-          { pitch: 'C3', file: 'piano_c3.mp3' },
-          { pitch: 'D3', file: 'piano_d3.mp3' },
-          { pitch: 'E3', file: 'piano_e3.mp3' },
-          { pitch: 'F3', file: 'piano_f3.mp3' },
-          { pitch: 'G3', file: 'piano_g3.mp3' },
-          { pitch: 'A3', file: 'piano_a3.mp3' },
-          { pitch: 'B3', file: 'piano_b3.mp3' },
-          { pitch: 'C4', file: 'piano_c4.mp3' }
-        ]
-      },
-      playStyle: 'chord',
-      difficulty: 6,
-      skillRequirement: 4,
-      visualEffects: {
-        animation: 'piano_play',
-        particles: 'elegant_notes'
-      }
-    }
-  ];
-
-  private readonly DEFAULT_SCORES: MusicScore[] = [
-    {
-      id: 'simple_melody',
-      title: 'Simple Melody',
-      composer: 'Tutorial Master',
-      difficulty: 1,
-      duration: 30000, // 30 seconds
-      instruments: ['acoustic_guitar', 'flute'],
-      notes: [
-        { time: 0, pitch: 'E4', duration: 500, instrument: 'flute', velocity: 80 },
-        { time: 500, pitch: 'G4', duration: 500, instrument: 'flute', velocity: 80 },
-        { time: 1000, pitch: 'E4', duration: 500, instrument: 'flute', velocity: 80 }
-        // Add more notes as needed
-      ],
-      metadata: {
-        genre: 'Tutorial',
-        tags: ['beginner', 'practice'],
-        description: 'A simple melody for beginners to practice with'
-      }
-    },
-    {
-      id: 'forest_dance',
-      title: 'Forest Dance',
-      composer: 'Nature Bard',
-      difficulty: 3,
-      duration: 60000, // 60 seconds
-      instruments: ['flute', 'drums'],
-      notes: [
-        { time: 0, pitch: 'C4', duration: 500, instrument: 'flute', velocity: 90 },
-        { time: 0, pitch: 'kick', duration: 250, instrument: 'drums', velocity: 100 }
-        // Add more notes as needed
-      ],
-      metadata: {
-        genre: 'Folk',
-        tags: ['nature', 'upbeat'],
-        description: 'A lively tune inspired by forest festivities'
-      }
-    }
-  ];
-
-  private constructor() {
+  constructor() {
     super();
     this.initializeInstruments();
-    this.initializeScores();
+    this.initializeSongs();
   }
 
-  static getInstance(): MusicService {
-    if (!MusicService.instance) {
-      MusicService.instance = new MusicService();
-    }
-    return MusicService.instance;
+  private initializeInstruments(): void {
+    const defaultInstruments: Instrument[] = [
+      {
+        id: 'PIANO-1',
+        name: 'Basic Piano',
+        type: 'PIANO',
+        category: 'KEYBOARD',
+        soundSet: {
+          baseUrl: '/sounds/piano/',
+          format: 'mp3',
+          samples: [
+            { note: 'C4', url: 'C4.mp3' },
+            { note: 'E4', url: 'E4.mp3' },
+            { note: 'G4', url: 'G4.mp3' }
+          ]
+        },
+        range: {
+          min: 36,
+          max: 84
+        },
+        tuning: ['C', 'D', 'E', 'F', 'G', 'A', 'B'],
+        effects: [
+          {
+            type: 'SOOTHE',
+            value: 1.2,
+            area: {
+              radius: 10,
+              falloff: 0.5
+            }
+          }
+        ],
+        requirements: {
+          level: 1
+        },
+        stats: {
+          power: 5,
+          resonance: 8,
+          harmony: 7,
+          control: 6,
+          durability: 10
+        }
+      }
+      // Add more instruments...
+    ];
+
+    defaultInstruments.forEach(instrument =>
+      this.instruments.set(instrument.id, instrument)
+    );
   }
 
-  private initializeInstruments() {
-    this.DEFAULT_INSTRUMENTS.forEach(instrument => this.instruments.set(instrument.id, instrument));
+  private initializeSongs(): void {
+    const defaultSongs: Song[] = [
+      {
+        id: 'SONG-1',
+        title: 'Simple Melody',
+        composer: 'Tutorial Master',
+        difficulty: 1,
+        duration: 60,
+        bpm: 120,
+        notes: [
+          {
+            time: 0,
+            pitch: 'C4',
+            duration: 0.5,
+            velocity: 0.8
+          },
+          {
+            time: 0.5,
+            pitch: 'E4',
+            duration: 0.5,
+            velocity: 0.8
+          },
+          {
+            time: 1,
+            pitch: 'G4',
+            duration: 1,
+            velocity: 0.8
+          }
+        ],
+        sections: [
+          {
+            name: 'Main Theme',
+            startTime: 0,
+            endTime: 60,
+            type: 'VERSE'
+          }
+        ],
+        effects: [
+          {
+            type: 'INSPIRE',
+            value: 1.1,
+            startTime: 0,
+            duration: 60
+          }
+        ],
+        requirements: {
+          instrument: ['PIANO', 'GUITAR'],
+          level: 1
+        }
+      }
+      // Add more songs...
+    ];
+
+    defaultSongs.forEach(song =>
+      this.songs.set(song.id, song)
+    );
   }
 
-  private initializeScores() {
-    this.DEFAULT_SCORES.forEach(score => this.scores.set(score.id, score));
-  }
-
-  async startPerformance(
-    userId: string,
-    scoreId: string,
-    instrumentId: string
+  public async startPerformance(
+    playerId: string,
+    instrumentId: string,
+    songId: string
   ): Promise<Performance> {
-    const score = this.scores.get(scoreId);
     const instrument = this.instruments.get(instrumentId);
-
-    if (!score || !instrument) {
-      throw new Error('Invalid score or instrument');
+    if (!instrument) {
+      throw new Error('Instrument not found');
     }
 
-    if (!score.instruments.includes(instrumentId)) {
-      throw new Error('This instrument is not used in this score');
+    const song = this.songs.get(songId);
+    if (!song) {
+      throw new Error('Song not found');
     }
 
-    const stats = await this.getStats(userId);
-    if (stats.instrumentMastery[instrumentId] || 0 < instrument.skillRequirement) {
-      throw new Error('Insufficient skill level for this instrument');
-    }
-
-    // End any existing performance
-    const existingPerformanceId = this.activePerformers.get(userId);
-    if (existingPerformanceId) {
-      await this.endPerformance(existingPerformanceId);
+    if (!song.requirements.instrument.includes(instrument.type)) {
+      throw new Error('Instrument not compatible with song');
     }
 
     const performance: Performance = {
-      id: crypto.randomUUID(),
-      userId,
-      scoreId,
+      id: `PERF-${Date.now()}`,
+      playerId,
       instrumentId,
-      startTime: new Date(),
-      accuracy: 0,
-      rating: 0,
-      listeners: [],
+      song,
+      startedAt: new Date().toISOString(),
+      effects: [],
+      audience: [],
       reactions: []
     };
 
     this.performances.set(performance.id, performance);
-    this.activePerformers.set(userId, performance.id);
+    this.emit('performance:started', { performanceId: performance.id });
 
-    this.emit('performanceStarted', performance);
     return performance;
   }
 
-  async playNote(
+  public async endPerformance(
     performanceId: string,
-    note: {
-      pitch: string;
-      velocity: number;
-      timestamp: number;
+    stats: {
+      score: number;
+      accuracy: number;
+      combo: number;
     }
-  ): Promise<void> {
+  ): Promise<Performance> {
     const performance = this.performances.get(performanceId);
-    if (!performance || performance.endTime) {
-      throw new Error('Invalid or ended performance');
+    if (!performance) {
+      throw new Error('Performance not found');
     }
 
-    const score = this.scores.get(performance.scoreId);
-    if (!score) {
-      throw new Error('Score not found');
-    }
-
-    // Find the closest matching note in the score
-    const expectedNote = score.notes.find(n =>
-      n.instrument === performance.instrumentId &&
-      Math.abs(n.time - note.timestamp) < 200 && // 200ms window
-      n.pitch === note.pitch
-    );
-
-    if (expectedNote) {
-      // Calculate accuracy based on timing and velocity
-      const timingDiff = Math.abs(expectedNote.time - note.timestamp);
-      const velocityDiff = Math.abs(expectedNote.velocity - note.velocity);
-      const accuracy = Math.max(0, 100 - (timingDiff / 2) - (velocityDiff / 2));
-
-      // Update performance accuracy
-      performance.accuracy = (performance.accuracy + accuracy) / 2;
-      this.performances.set(performanceId, performance);
-    }
-
-    this.emit('notePlayed', {
-      performanceId,
-      note,
-      accuracy: expectedNote ? performance.accuracy : 0
-    });
-  }
-
-  async endPerformance(performanceId: string): Promise<Performance> {
-    const performance = this.performances.get(performanceId);
-    if (!performance || performance.endTime) {
-      throw new Error('Invalid or already ended performance');
-    }
-
-    performance.endTime = new Date();
-
-    // Calculate final rating based on accuracy and listeners
-    performance.rating = Math.min(
-      100,
-      performance.accuracy +
-      (performance.listeners.length * 5) +
-      (performance.reactions.length * 2)
-    );
+    performance.endedAt = new Date().toISOString();
+    performance.score = stats.score;
+    performance.accuracy = stats.accuracy;
+    performance.combo = stats.combo;
 
     this.performances.set(performanceId, performance);
-    this.activePerformers.delete(performance.userId);
+    this.updateUserStats(performance.playerId, performance);
+    this.emit('performance:ended', { performanceId });
 
-    // Update stats
-    await this.updateStats(performance);
-
-    this.emit('performanceEnded', performance);
     return performance;
   }
 
-  async listenToPerformance(performanceId: string, listenerId: string): Promise<void> {
-    const performance = this.performances.get(performanceId);
-    if (!performance || performance.endTime) {
-      throw new Error('Invalid or ended performance');
-    }
-
-    if (!performance.listeners.includes(listenerId)) {
-      performance.listeners.push(listenerId);
-      this.performances.set(performanceId, performance);
-      this.emit('listenerJoined', { performanceId, listenerId });
-    }
-  }
-
-  async addReaction(
+  public async addReaction(
     performanceId: string,
     userId: string,
-    type: string
-  ): Promise<void> {
+    type: ReactionType
+  ): Promise<Performance> {
     const performance = this.performances.get(performanceId);
-    if (!performance || performance.endTime) {
-      throw new Error('Invalid or ended performance');
+    if (!performance) {
+      throw new Error('Performance not found');
     }
 
-    const reaction = {
+    performance.reactions.push({
       userId,
       type,
-      timestamp: new Date()
-    };
+      timestamp: new Date().toISOString()
+    });
 
-    performance.reactions.push(reaction);
     this.performances.set(performanceId, performance);
-    this.emit('reactionAdded', { performanceId, reaction });
+    this.emit('performance:reaction', {
+      performanceId,
+      userId,
+      type
+    });
+
+    return performance;
   }
 
-  private async updateStats(performance: Performance) {
-    let stats = this.userStats.get(performance.userId);
+  public async addAudienceMember(
+    performanceId: string,
+    userId: string
+  ): Promise<Performance> {
+    const performance = this.performances.get(performanceId);
+    if (!performance) {
+      throw new Error('Performance not found');
+    }
+
+    if (!performance.audience.includes(userId)) {
+      performance.audience.push(userId);
+      this.performances.set(performanceId, performance);
+      this.emit('performance:audience-joined', {
+        performanceId,
+        userId
+      });
+    }
+
+    return performance;
+  }
+
+  public async addEffect(
+    performanceId: string,
+    effect: {
+      type: EffectType;
+      value: number;
+      targetId?: string;
+      duration: number;
+    }
+  ): Promise<Performance> {
+    const performance = this.performances.get(performanceId);
+    if (!performance) {
+      throw new Error('Performance not found');
+    }
+
+    const performanceEffect = {
+      ...effect,
+      startTime: Date.now()
+    };
+
+    performance.effects.push(performanceEffect);
+    this.performances.set(performanceId, performance);
+    this.emit('performance:effect-added', {
+      performanceId,
+      effect: performanceEffect
+    });
+
+    return performance;
+  }
+
+  private updateUserStats(
+    userId: string,
+    performance: Performance
+  ): void {
+    let stats = this.userStats.get(userId);
     if (!stats) {
       stats = {
         totalPerformances: 0,
+        instrumentsPlayed: {} as Record<InstrumentType, number>,
+        songsLearned: 0,
+        highestCombo: 0,
         averageAccuracy: 0,
-        bestRating: 0,
-        totalListeners: 0,
-        instrumentMastery: {},
-        performanceHistory: []
+        totalPlaytime: 0,
+        audienceReached: 0,
+        effectsTriggered: 0,
+        specialAchievements: []
       };
     }
 
-    // Update general stats
+    const instrument = this.instruments.get(performance.instrumentId);
+    if (!instrument) return;
+
+    // Update basic stats
     stats.totalPerformances++;
-    stats.averageAccuracy = (
-      (stats.averageAccuracy * (stats.totalPerformances - 1) + performance.accuracy) /
-      stats.totalPerformances
-    );
-    stats.bestRating = Math.max(stats.bestRating, performance.rating);
-    stats.totalListeners += performance.listeners.length;
+    stats.instrumentsPlayed[instrument.type] =
+      (stats.instrumentsPlayed[instrument.type] || 0) + 1;
 
-    // Update instrument mastery
-    const currentMastery = stats.instrumentMastery[performance.instrumentId] || 0;
-    stats.instrumentMastery[performance.instrumentId] = Math.min(
-      100,
-      currentMastery + (performance.accuracy / 10)
-    );
-
-    // Update favorite instrument
-    const performances = stats.performanceHistory.filter(
-      p => p.scoreId === performance.scoreId
-    ).length;
-    if (
-      !stats.favoriteInstrument ||
-      performances > stats.performanceHistory.filter(
-        p => p.scoreId === stats.favoriteInstrument
-      ).length
-    ) {
-      stats.favoriteInstrument = performance.instrumentId;
+    if (performance.combo) {
+      stats.highestCombo = Math.max(stats.highestCombo, performance.combo);
     }
 
-    // Add to history
-    stats.performanceHistory.push({
-      scoreId: performance.scoreId,
-      accuracy: performance.accuracy,
-      rating: performance.rating,
-      timestamp: performance.startTime
-    });
-
-    // Keep only last 100 performances in history
-    if (stats.performanceHistory.length > 100) {
-      stats.performanceHistory = stats.performanceHistory.slice(-100);
+    if (performance.accuracy) {
+      stats.averageAccuracy = (
+        stats.averageAccuracy * (stats.totalPerformances - 1) +
+        performance.accuracy
+      ) / stats.totalPerformances;
     }
 
-    this.userStats.set(performance.userId, stats);
-    this.emit('statsUpdated', { userId: performance.userId, stats });
+    if (performance.startedAt && performance.endedAt) {
+      const duration = new Date(performance.endedAt).getTime() -
+        new Date(performance.startedAt).getTime();
+      stats.totalPlaytime += duration;
+    }
+
+    stats.audienceReached += performance.audience.length;
+    stats.effectsTriggered += performance.effects.length;
+
+    // Check for achievements
+    if (stats.totalPerformances >= 100) {
+      this.addAchievement(stats, 'VETERAN_PERFORMER');
+    }
+    if (stats.highestCombo >= 50) {
+      this.addAchievement(stats, 'COMBO_MASTER');
+    }
+    if (stats.averageAccuracy >= 95) {
+      this.addAchievement(stats, 'PERFECT_PITCH');
+    }
+
+    this.userStats.set(userId, stats);
   }
 
-  async getInstrument(instrumentId: string): Promise<Instrument | null> {
-    return this.instruments.get(instrumentId) || null;
+  private addAchievement(stats: MusicianStats, achievement: string): void {
+    if (!stats.specialAchievements.includes(achievement)) {
+      stats.specialAchievements.push(achievement);
+      this.emit('achievement:unlocked', { achievement });
+    }
   }
 
-  async getAvailableInstruments(userId: string): Promise<Instrument[]> {
-    const stats = await this.getStats(userId);
-    return Array.from(this.instruments.values()).filter(
-      instrument => stats.instrumentMastery[instrument.id] || 0 >= instrument.skillRequirement
-    );
+  public async getInstruments(): Promise<Instrument[]> {
+    return Array.from(this.instruments.values());
   }
 
-  async getScore(scoreId: string): Promise<MusicScore | null> {
-    return this.scores.get(scoreId) || null;
+  public async getSongs(): Promise<Song[]> {
+    return Array.from(this.songs.values());
   }
 
-  async getAvailableScores(userId: string): Promise<MusicScore[]> {
-    const stats = await this.getStats(userId);
-    return Array.from(this.scores.values()).filter(score =>
-      score.instruments.some(
-        instrumentId => stats.instrumentMastery[instrumentId] || 0 >= this.instruments.get(instrumentId)?.skillRequirement || 0
-      )
-    );
+  public async getPerformance(
+    performanceId: string
+  ): Promise<Performance | undefined> {
+    return this.performances.get(performanceId);
   }
 
-  async getPerformance(performanceId: string): Promise<Performance | null> {
-    return this.performances.get(performanceId) || null;
-  }
-
-  async getActivePerformances(): Promise<Performance[]> {
-    return Array.from(this.performances.values()).filter(
-      performance => !performance.endTime
-    );
-  }
-
-  async getStats(userId: string): Promise<MusicianStats> {
+  public async getUserStats(userId: string): Promise<MusicianStats> {
     return (
       this.userStats.get(userId) || {
         totalPerformances: 0,
+        instrumentsPlayed: {},
+        songsLearned: 0,
+        highestCombo: 0,
         averageAccuracy: 0,
-        bestRating: 0,
-        totalListeners: 0,
-        instrumentMastery: {},
-        performanceHistory: []
+        totalPlaytime: 0,
+        audienceReached: 0,
+        effectsTriggered: 0,
+        specialAchievements: []
       }
     );
   }
-
-  onPerformanceStarted(callback: (performance: Performance) => void) {
-    this.on('performanceStarted', callback);
-  }
-
-  onNotePlayed(callback: (data: {
-    performanceId: string;
-    note: { pitch: string; velocity: number; timestamp: number };
-    accuracy: number;
-  }) => void) {
-    this.on('notePlayed', callback);
-  }
-
-  onPerformanceEnded(callback: (performance: Performance) => void) {
-    this.on('performanceEnded', callback);
-  }
-
-  onListenerJoined(callback: (data: { performanceId: string; listenerId: string }) => void) {
-    this.on('listenerJoined', callback);
-  }
-
-  onReactionAdded(callback: (data: {
-    performanceId: string;
-    reaction: { userId: string; type: string; timestamp: Date };
-  }) => void) {
-    this.on('reactionAdded', callback);
-  }
-
-  onStatsUpdated(callback: (data: { userId: string; stats: MusicianStats }) => void) {
-    this.on('statsUpdated', callback);
-  }
 }
-
-export const musicService = MusicService.getInstance();

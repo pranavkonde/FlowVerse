@@ -1,377 +1,368 @@
 import { EventEmitter } from 'events';
-import { AchievementService } from './AchievementService';
-import { SocialService } from './SocialService';
-import { LeaderboardService } from './LeaderboardService';
-
-export interface Showcase {
-  id: string;
-  userId: string;
-  title: string;
-  description: string;
-  achievements: ShowcaseAchievement[];
-  layout: 'grid' | 'list' | 'timeline';
-  theme: ShowcaseTheme;
-  isPublic: boolean;
-  likes: number;
-  views: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface ShowcaseAchievement {
-  id: string;
-  achievementId: string;
-  position: { x: number; y: number };
-  scale: number;
-  rotation: number;
-  customDescription?: string;
-  customStyle?: {
-    borderColor?: string;
-    backgroundColor?: string;
-    glowEffect?: boolean;
-    animation?: string;
-  };
-}
-
-export interface ShowcaseTheme {
-  id: string;
-  name: string;
-  backgroundColor: string;
-  backgroundImage?: string;
-  borderStyle: string;
-  fontFamily: string;
-  primaryColor: string;
-  secondaryColor: string;
-  accentColor: string;
-  effects: {
-    particles?: boolean;
-    glow?: boolean;
-    parallax?: boolean;
-    animation?: string;
-  };
-}
+import {
+  AchievementShowcase,
+  ShowcaseAchievement,
+  ShowcaseStats,
+  ShowcaseComment,
+  ShowcaseFilter,
+  ShowcaseLayout,
+  ShowcaseTheme,
+  ShowcaseVisibility,
+  AchievementCategory,
+  AchievementRarity
+} from '../types/achievementShowcase';
 
 export class AchievementShowcaseService extends EventEmitter {
-  private static instance: AchievementShowcaseService;
-  private showcases: Map<string, Showcase> = new Map();
-  private userShowcases: Map<string, Set<string>> = new Map();
-  private showcaseViews: Map<string, Set<string>> = new Map(); // showcaseId -> Set of userIds
-  private showcaseLikes: Map<string, Set<string>> = new Map(); // showcaseId -> Set of userIds
+  private showcases: Map<string, AchievementShowcase> = new Map();
+  private comments: Map<string, ShowcaseComment[]> = new Map();
+  private userStats: Map<string, ShowcaseStats> = new Map();
 
-  private readonly DEFAULT_THEMES: ShowcaseTheme[] = [
-    {
-      id: 'classic',
-      name: 'Classic',
-      backgroundColor: '#1a1a1a',
-      borderStyle: 'solid',
-      fontFamily: 'Arial',
-      primaryColor: '#ffffff',
-      secondaryColor: '#cccccc',
-      accentColor: '#ffd700',
-      effects: {}
-    },
-    {
-      id: 'neon',
-      name: 'Neon Dreams',
-      backgroundColor: '#000000',
-      borderStyle: 'glow',
-      fontFamily: 'Cyberpunk',
-      primaryColor: '#00ff00',
-      secondaryColor: '#ff00ff',
-      accentColor: '#00ffff',
-      effects: {
-        glow: true,
-        particles: true
-      }
-    },
-    {
-      id: 'royal',
-      name: 'Royal',
-      backgroundColor: '#2c1810',
-      backgroundImage: '/assets/themes/royal_pattern.png',
-      borderStyle: 'ornate',
-      fontFamily: 'Serif',
-      primaryColor: '#ffd700',
-      secondaryColor: '#c0c0c0',
-      accentColor: '#8b0000',
-      effects: {
-        parallax: true
-      }
-    }
-  ];
-
-  private constructor(
-    private achievementService: AchievementService,
-    private socialService: SocialService,
-    private leaderboardService: LeaderboardService
-  ) {
+  constructor() {
     super();
+    this.startFeaturedRotation();
   }
 
-  static getInstance(
-    achievementService: AchievementService,
-    socialService: SocialService,
-    leaderboardService: LeaderboardService
-  ): AchievementShowcaseService {
-    if (!AchievementShowcaseService.instance) {
-      AchievementShowcaseService.instance = new AchievementShowcaseService(
-        achievementService,
-        socialService,
-        leaderboardService
-      );
-    }
-    return AchievementShowcaseService.instance;
+  private startFeaturedRotation(): void {
+    // Rotate featured showcases daily
+    setInterval(() => {
+      const showcases = Array.from(this.showcases.values());
+      const currentFeatured = showcases.filter(s => s.featured);
+      const nonFeatured = showcases.filter(s => !s.featured && s.visibility === 'PUBLIC');
+
+      // Unfeature current featured showcases
+      currentFeatured.forEach(showcase => {
+        showcase.featured = false;
+        this.showcases.set(showcase.id, showcase);
+      });
+
+      // Feature new showcases
+      const newFeatured = nonFeatured
+        .sort((a, b) => (b.likes + b.views) - (a.likes + a.views))
+        .slice(0, 5);
+
+      newFeatured.forEach(showcase => {
+        showcase.featured = true;
+        this.showcases.set(showcase.id, showcase);
+        this.emit('showcase:featured', { showcaseId: showcase.id });
+      });
+    }, 24 * 60 * 60 * 1000); // Every 24 hours
   }
 
-  async createShowcase(
+  public async createShowcase(
     userId: string,
-    data: {
-      title: string;
-      description: string;
-      layout: Showcase['layout'];
-      themeId: string;
-      isPublic: boolean;
-    }
-  ): Promise<Showcase> {
-    const theme = this.DEFAULT_THEMES.find(t => t.id === data.themeId) || this.DEFAULT_THEMES[0];
-
-    const showcase: Showcase = {
-      id: crypto.randomUUID(),
+    data: Partial<AchievementShowcase>
+  ): Promise<AchievementShowcase> {
+    const showcase: AchievementShowcase = {
+      id: `SHOWCASE-${Date.now()}`,
       userId,
-      title: data.title,
-      description: data.description,
-      achievements: [],
-      layout: data.layout,
-      theme,
-      isPublic: data.isPublic,
+      title: data.title || 'My Achievement Showcase',
+      description: data.description || '',
+      achievements: data.achievements || [],
+      layout: data.layout || 'GRID',
+      theme: data.theme || 'DEFAULT',
+      visibility: data.visibility || 'PUBLIC',
       likes: 0,
       views: 0,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      featured: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
     this.showcases.set(showcase.id, showcase);
-    
-    const userShowcases = this.userShowcases.get(userId) || new Set();
-    userShowcases.add(showcase.id);
-    this.userShowcases.set(userId, userShowcases);
+    this.updateUserStats(userId);
+    this.emit('showcase:created', { showcaseId: showcase.id });
 
-    this.emit('showcaseCreated', showcase);
     return showcase;
   }
 
-  async addAchievementToShowcase(
-    showcaseId: string,
+  public async updateShowcase(
     userId: string,
-    data: Omit<ShowcaseAchievement, 'id'>
-  ): Promise<ShowcaseAchievement> {
+    showcaseId: string,
+    updates: Partial<AchievementShowcase>
+  ): Promise<AchievementShowcase> {
     const showcase = this.showcases.get(showcaseId);
     if (!showcase || showcase.userId !== userId) {
       throw new Error('Showcase not found or unauthorized');
     }
 
-    const achievement: ShowcaseAchievement = {
-      id: crypto.randomUUID(),
-      ...data
+    const updatedShowcase = {
+      ...showcase,
+      ...updates,
+      updatedAt: new Date().toISOString()
     };
 
+    this.showcases.set(showcaseId, updatedShowcase);
+    this.emit('showcase:updated', { showcaseId });
+
+    return updatedShowcase;
+  }
+
+  public async addAchievement(
+    userId: string,
+    showcaseId: string,
+    achievement: ShowcaseAchievement
+  ): Promise<AchievementShowcase> {
+    const showcase = this.showcases.get(showcaseId);
+    if (!showcase || showcase.userId !== userId) {
+      throw new Error('Showcase not found or unauthorized');
+    }
+
     showcase.achievements.push(achievement);
-    showcase.updatedAt = new Date();
+    showcase.updatedAt = new Date().toISOString();
+
     this.showcases.set(showcaseId, showcase);
+    this.updateUserStats(userId);
+    this.emit('showcase:achievement-added', { showcaseId, achievementId: achievement.id });
 
-    this.emit('achievementAdded', { showcase, achievement });
-    return achievement;
-  }
-
-  async updateAchievementInShowcase(
-    showcaseId: string,
-    achievementId: string,
-    userId: string,
-    updates: Partial<Omit<ShowcaseAchievement, 'id' | 'achievementId'>>
-  ): Promise<ShowcaseAchievement> {
-    const showcase = this.showcases.get(showcaseId);
-    if (!showcase || showcase.userId !== userId) {
-      throw new Error('Showcase not found or unauthorized');
-    }
-
-    const achievement = showcase.achievements.find(a => a.id === achievementId);
-    if (!achievement) {
-      throw new Error('Achievement not found in showcase');
-    }
-
-    Object.assign(achievement, updates);
-    showcase.updatedAt = new Date();
-    this.showcases.set(showcaseId, showcase);
-
-    this.emit('achievementUpdated', { showcase, achievement });
-    return achievement;
-  }
-
-  async removeAchievementFromShowcase(
-    showcaseId: string,
-    achievementId: string,
-    userId: string
-  ): Promise<boolean> {
-    const showcase = this.showcases.get(showcaseId);
-    if (!showcase || showcase.userId !== userId) {
-      throw new Error('Showcase not found or unauthorized');
-    }
-
-    const index = showcase.achievements.findIndex(a => a.id === achievementId);
-    if (index === -1) {
-      return false;
-    }
-
-    showcase.achievements.splice(index, 1);
-    showcase.updatedAt = new Date();
-    this.showcases.set(showcaseId, showcase);
-
-    this.emit('achievementRemoved', { showcase, achievementId });
-    return true;
-  }
-
-  async updateShowcase(
-    showcaseId: string,
-    userId: string,
-    updates: Partial<Pick<Showcase, 'title' | 'description' | 'layout' | 'isPublic'>>
-  ): Promise<Showcase> {
-    const showcase = this.showcases.get(showcaseId);
-    if (!showcase || showcase.userId !== userId) {
-      throw new Error('Showcase not found or unauthorized');
-    }
-
-    Object.assign(showcase, updates);
-    showcase.updatedAt = new Date();
-    this.showcases.set(showcaseId, showcase);
-
-    this.emit('showcaseUpdated', showcase);
     return showcase;
   }
 
-  async deleteShowcase(showcaseId: string, userId: string): Promise<boolean> {
+  public async removeAchievement(
+    userId: string,
+    showcaseId: string,
+    achievementId: string
+  ): Promise<AchievementShowcase> {
     const showcase = this.showcases.get(showcaseId);
     if (!showcase || showcase.userId !== userId) {
       throw new Error('Showcase not found or unauthorized');
     }
 
-    this.showcases.delete(showcaseId);
-    
-    const userShowcases = this.userShowcases.get(userId);
-    if (userShowcases) {
-      userShowcases.delete(showcaseId);
-    }
+    showcase.achievements = showcase.achievements.filter(
+      a => a.id !== achievementId
+    );
+    showcase.updatedAt = new Date().toISOString();
 
-    this.emit('showcaseDeleted', { showcaseId, userId });
-    return true;
+    this.showcases.set(showcaseId, showcase);
+    this.updateUserStats(userId);
+    this.emit('showcase:achievement-removed', { showcaseId, achievementId });
+
+    return showcase;
   }
 
-  async getShowcase(showcaseId: string): Promise<Showcase | null> {
-    return this.showcases.get(showcaseId) || null;
-  }
-
-  async getUserShowcases(userId: string): Promise<Showcase[]> {
-    const showcaseIds = this.userShowcases.get(userId) || new Set();
-    return Array.from(showcaseIds)
-      .map(id => this.showcases.get(id))
-      .filter((showcase): showcase is Showcase => showcase !== undefined);
-  }
-
-  async getPublicShowcases(limit: number = 10, offset: number = 0): Promise<Showcase[]> {
-    return Array.from(this.showcases.values())
-      .filter(showcase => showcase.isPublic)
-      .sort((a, b) => b.likes - a.likes || b.views - a.views)
-      .slice(offset, offset + limit);
-  }
-
-  async viewShowcase(showcaseId: string, viewerId: string): Promise<void> {
+  public async updateAchievementPosition(
+    userId: string,
+    showcaseId: string,
+    achievementId: string,
+    position: { x: number; y: number },
+    scale?: number,
+    rotation?: number
+  ): Promise<AchievementShowcase> {
     const showcase = this.showcases.get(showcaseId);
-    if (!showcase) return;
-
-    const views = this.showcaseViews.get(showcaseId) || new Set();
-    if (!views.has(viewerId)) {
-      views.add(viewerId);
-      this.showcaseViews.set(showcaseId, views);
-      showcase.views = views.size;
-      this.showcases.set(showcaseId, showcase);
-      this.emit('showcaseViewed', { showcaseId, viewerId });
+    if (!showcase || showcase.userId !== userId) {
+      throw new Error('Showcase not found or unauthorized');
     }
+
+    showcase.achievements = showcase.achievements.map(achievement =>
+      achievement.id === achievementId
+        ? {
+            ...achievement,
+            position,
+            ...(scale !== undefined && { scale }),
+            ...(rotation !== undefined && { rotation })
+          }
+        : achievement
+    );
+    showcase.updatedAt = new Date().toISOString();
+
+    this.showcases.set(showcaseId, showcase);
+    this.emit('showcase:achievement-moved', { showcaseId, achievementId });
+
+    return showcase;
   }
 
-  async likeShowcase(showcaseId: string, likerId: string): Promise<boolean> {
+  public async likeShowcase(
+    userId: string,
+    showcaseId: string
+  ): Promise<AchievementShowcase> {
     const showcase = this.showcases.get(showcaseId);
-    if (!showcase) return false;
-
-    const likes = this.showcaseLikes.get(showcaseId) || new Set();
-    if (!likes.has(likerId)) {
-      likes.add(likerId);
-      this.showcaseLikes.set(showcaseId, likes);
-      showcase.likes = likes.size;
-      this.showcases.set(showcaseId, showcase);
-      this.emit('showcaseLiked', { showcaseId, likerId });
-      return true;
+    if (!showcase) {
+      throw new Error('Showcase not found');
     }
-    return false;
+
+    showcase.likes++;
+    this.showcases.set(showcaseId, showcase);
+    this.emit('showcase:liked', { showcaseId, userId });
+
+    return showcase;
   }
 
-  async unlikeShowcase(showcaseId: string, likerId: string): Promise<boolean> {
+  public async viewShowcase(
+    userId: string,
+    showcaseId: string
+  ): Promise<AchievementShowcase> {
     const showcase = this.showcases.get(showcaseId);
-    if (!showcase) return false;
-
-    const likes = this.showcaseLikes.get(showcaseId);
-    if (likes?.has(likerId)) {
-      likes.delete(likerId);
-      this.showcaseLikes.set(showcaseId, likes);
-      showcase.likes = likes.size;
-      this.showcases.set(showcaseId, showcase);
-      this.emit('showcaseUnliked', { showcaseId, likerId });
-      return true;
+    if (!showcase) {
+      throw new Error('Showcase not found');
     }
-    return false;
+
+    showcase.views++;
+    this.showcases.set(showcaseId, showcase);
+    this.emit('showcase:viewed', { showcaseId, userId });
+
+    return showcase;
   }
 
-  async getShowcaseThemes(): Promise<ShowcaseTheme[]> {
-    return this.DEFAULT_THEMES;
+  public async addComment(
+    userId: string,
+    showcaseId: string,
+    content: string
+  ): Promise<ShowcaseComment> {
+    const showcase = this.showcases.get(showcaseId);
+    if (!showcase) {
+      throw new Error('Showcase not found');
+    }
+
+    const comment: ShowcaseComment = {
+      id: `COMMENT-${Date.now()}`,
+      showcaseId,
+      userId,
+      content,
+      likes: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const comments = this.comments.get(showcaseId) || [];
+    comments.push(comment);
+    this.comments.set(showcaseId, comments);
+
+    this.emit('showcase:commented', { showcaseId, commentId: comment.id });
+
+    return comment;
   }
 
-  onShowcaseCreated(callback: (showcase: Showcase) => void) {
-    this.on('showcaseCreated', callback);
+  public async getShowcaseComments(
+    showcaseId: string
+  ): Promise<ShowcaseComment[]> {
+    return this.comments.get(showcaseId) || [];
   }
 
-  onShowcaseUpdated(callback: (showcase: Showcase) => void) {
-    this.on('showcaseUpdated', callback);
+  public async getUserShowcases(userId: string): Promise<AchievementShowcase[]> {
+    return Array.from(this.showcases.values()).filter(
+      showcase => showcase.userId === userId
+    );
   }
 
-  onShowcaseDeleted(callback: (data: { showcaseId: string; userId: string }) => void) {
-    this.on('showcaseDeleted', callback);
+  public async getPublicShowcases(
+    filter?: ShowcaseFilter
+  ): Promise<AchievementShowcase[]> {
+    let showcases = Array.from(this.showcases.values()).filter(
+      showcase => showcase.visibility === 'PUBLIC'
+    );
+
+    if (filter) {
+      if (filter.categories) {
+        showcases = showcases.filter(showcase =>
+          showcase.achievements.some(a =>
+            filter.categories!.includes(a.category)
+          )
+        );
+      }
+
+      if (filter.rarities) {
+        showcases = showcases.filter(showcase =>
+          showcase.achievements.some(a =>
+            filter.rarities!.includes(a.rarity)
+          )
+        );
+      }
+
+      if (filter.layout) {
+        showcases = showcases.filter(s => s.layout === filter.layout);
+      }
+
+      if (filter.theme) {
+        showcases = showcases.filter(s => s.theme === filter.theme);
+      }
+
+      if (filter.featured !== undefined) {
+        showcases = showcases.filter(s => s.featured === filter.featured);
+      }
+
+      if (filter.sortBy) {
+        switch (filter.sortBy) {
+          case 'recent':
+            showcases.sort((a, b) =>
+              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+            );
+            break;
+          case 'popular':
+            showcases.sort((a, b) =>
+              (b.likes + b.views) - (a.likes + a.views)
+            );
+            break;
+          case 'likes':
+            showcases.sort((a, b) => b.likes - a.likes);
+            break;
+          case 'views':
+            showcases.sort((a, b) => b.views - a.views);
+            break;
+        }
+      }
+    }
+
+    return showcases;
   }
 
-  onAchievementAdded(callback: (data: { showcase: Showcase; achievement: ShowcaseAchievement }) => void) {
-    this.on('achievementAdded', callback);
+  private updateUserStats(userId: string): void {
+    const userShowcases = Array.from(this.showcases.values()).filter(
+      showcase => showcase.userId === userId
+    );
+
+    const stats: ShowcaseStats = {
+      totalShowcases: userShowcases.length,
+      totalAchievements: userShowcases.reduce(
+        (sum, showcase) => sum + showcase.achievements.length,
+        0
+      ),
+      rarityDistribution: {} as Record<AchievementRarity, number>,
+      categoryDistribution: {} as Record<AchievementCategory, number>,
+      mostViewedShowcase: '',
+      mostLikedShowcase: '',
+      totalViews: 0,
+      totalLikes: 0
+    };
+
+    let maxViews = 0;
+    let maxLikes = 0;
+
+    userShowcases.forEach(showcase => {
+      stats.totalViews += showcase.views;
+      stats.totalLikes += showcase.likes;
+
+      if (showcase.views > maxViews) {
+        maxViews = showcase.views;
+        stats.mostViewedShowcase = showcase.id;
+      }
+
+      if (showcase.likes > maxLikes) {
+        maxLikes = showcase.likes;
+        stats.mostLikedShowcase = showcase.id;
+      }
+
+      showcase.achievements.forEach(achievement => {
+        stats.rarityDistribution[achievement.rarity] =
+          (stats.rarityDistribution[achievement.rarity] || 0) + 1;
+        stats.categoryDistribution[achievement.category] =
+          (stats.categoryDistribution[achievement.category] || 0) + 1;
+      });
+    });
+
+    this.userStats.set(userId, stats);
   }
 
-  onAchievementUpdated(callback: (data: { showcase: Showcase; achievement: ShowcaseAchievement }) => void) {
-    this.on('achievementUpdated', callback);
-  }
-
-  onAchievementRemoved(callback: (data: { showcase: Showcase; achievementId: string }) => void) {
-    this.on('achievementRemoved', callback);
-  }
-
-  onShowcaseViewed(callback: (data: { showcaseId: string; viewerId: string }) => void) {
-    this.on('showcaseViewed', callback);
-  }
-
-  onShowcaseLiked(callback: (data: { showcaseId: string; likerId: string }) => void) {
-    this.on('showcaseLiked', callback);
-  }
-
-  onShowcaseUnliked(callback: (data: { showcaseId: string; likerId: string }) => void) {
-    this.on('showcaseUnliked', callback);
+  public async getUserStats(userId: string): Promise<ShowcaseStats> {
+    return (
+      this.userStats.get(userId) || {
+        totalShowcases: 0,
+        totalAchievements: 0,
+        rarityDistribution: {},
+        categoryDistribution: {},
+        mostViewedShowcase: '',
+        mostLikedShowcase: '',
+        totalViews: 0,
+        totalLikes: 0
+      }
+    );
   }
 }
-
-export const achievementShowcaseService = AchievementShowcaseService.getInstance(
-  new AchievementService(),
-  new SocialService(),
-  new LeaderboardService()
-);

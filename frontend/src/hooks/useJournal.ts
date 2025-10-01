@@ -2,59 +2,100 @@ import { useState, useEffect } from 'react';
 import {
   JournalEntry,
   JournalCollection,
-  JournalStats
+  JournalStats,
+  JournalTemplate,
+  JournalFilter
 } from '../types/journal';
 import { api } from '../services/api';
 
 interface UseJournalResult {
   entries: JournalEntry[];
   collections: JournalCollection[];
+  templates: JournalTemplate[];
   stats: JournalStats | null;
   loading: boolean;
   error: string | null;
-  createEntry: (data: Omit<JournalEntry, 'id' | 'userId' | 'timestamp' | 'isHidden' | 'isPinned'>) => Promise<JournalEntry>;
-  updateEntry: (entryId: string, updates: Partial<JournalEntry>) => Promise<void>;
+  createEntry: (data: Partial<JournalEntry>) => Promise<JournalEntry>;
+  updateEntry: (
+    entryId: string,
+    updates: Partial<JournalEntry>
+  ) => Promise<JournalEntry>;
   deleteEntry: (entryId: string) => Promise<void>;
-  createCollection: (data: { name: string; description: string; isDefault?: boolean }) => Promise<void>;
-  updateCollection: (collectionId: string, updates: Partial<JournalCollection>) => Promise<void>;
-  deleteCollection: (collectionId: string) => Promise<void>;
-  addEntryToCollection: (entryId: string, collectionId: string) => Promise<void>;
-  removeEntryFromCollection: (entryId: string, collectionId: string) => Promise<void>;
+  createCollection: (
+    data: Partial<JournalCollection>
+  ) => Promise<JournalCollection>;
+  updateCollection: (
+    collectionId: string,
+    updates: Partial<JournalCollection>
+  ) => Promise<JournalCollection>;
+  addEntryToCollection: (
+    entryId: string,
+    collectionId: string
+  ) => Promise<JournalCollection>;
+  removeEntryFromCollection: (
+    entryId: string,
+    collectionId: string
+  ) => Promise<JournalCollection>;
+  searchEntries: (filter: JournalFilter) => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
 export function useJournal(): UseJournalResult {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [collections, setCollections] = useState<JournalCollection[]>([]);
+  const [templates, setTemplates] = useState<JournalTemplate[]>([]);
   const [stats, setStats] = useState<JournalStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const fetchEntries = async (filter?: JournalFilter) => {
     try {
-      const [entriesResponse, collectionsResponse, statsResponse] = await Promise.all([
-        api.get('/journal/entries'),
-        api.get('/journal/collections'),
-        api.get('/journal/stats')
-      ]);
-
-      setEntries(entriesResponse.data);
-      setCollections(collectionsResponse.data);
-      setStats(statsResponse.data);
+      const response = await api.get('/journal/entries', {
+        params: filter
+      });
+      setEntries(response.data);
       setError(null);
     } catch (err) {
-      setError('Failed to load journal data');
-      console.error('Error fetching journal data:', err);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching journal entries:', err);
+      setError('Failed to load journal entries');
     }
   };
 
-  const createEntry = async (data: Omit<JournalEntry, 'id' | 'userId' | 'timestamp' | 'isHidden' | 'isPinned'>): Promise<JournalEntry> => {
+  const fetchCollections = async () => {
+    try {
+      const response = await api.get('/journal/collections');
+      setCollections(response.data);
+    } catch (err) {
+      console.error('Error fetching collections:', err);
+    }
+  };
+
+  const fetchTemplates = async () => {
+    try {
+      const response = await api.get('/journal/templates');
+      setTemplates(response.data);
+    } catch (err) {
+      console.error('Error fetching templates:', err);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const response = await api.get('/journal/stats');
+      setStats(response.data);
+    } catch (err) {
+      console.error('Error fetching journal stats:', err);
+    }
+  };
+
+  const createEntry = async (
+    data: Partial<JournalEntry>
+  ): Promise<JournalEntry> => {
     try {
       const response = await api.post('/journal/entries', data);
       const newEntry = response.data;
       setEntries(current => [...current, newEntry]);
+      await fetchStats();
       return newEntry;
     } catch (err) {
       console.error('Error creating entry:', err);
@@ -62,57 +103,49 @@ export function useJournal(): UseJournalResult {
     }
   };
 
-  const updateEntry = async (entryId: string, updates: Partial<JournalEntry>) => {
+  const updateEntry = async (
+    entryId: string,
+    updates: Partial<JournalEntry>
+  ): Promise<JournalEntry> => {
     try {
-      const response = await api.put(`/journal/entries/${entryId}`, updates);
+      const response = await api.put(
+        `/journal/entries/${entryId}`,
+        updates
+      );
+      const updatedEntry = response.data;
       setEntries(current =>
         current.map(entry =>
-          entry.id === entryId ? response.data : entry
+          entry.id === entryId ? updatedEntry : entry
         )
       );
+      return updatedEntry;
     } catch (err) {
       console.error('Error updating entry:', err);
       throw err;
     }
   };
 
-  const deleteEntry = async (entryId: string) => {
+  const deleteEntry = async (entryId: string): Promise<void> => {
     try {
       await api.delete(`/journal/entries/${entryId}`);
       setEntries(current =>
         current.filter(entry => entry.id !== entryId)
       );
-      setCollections(current =>
-        current.map(collection => ({
-          ...collection,
-          entries: collection.entries.filter(id => id !== entryId)
-        }))
-      );
+      await fetchStats();
     } catch (err) {
       console.error('Error deleting entry:', err);
       throw err;
     }
   };
 
-  const createCollection = async (data: {
-    name: string;
-    description: string;
-    isDefault?: boolean;
-  }) => {
+  const createCollection = async (
+    data: Partial<JournalCollection>
+  ): Promise<JournalCollection> => {
     try {
       const response = await api.post('/journal/collections', data);
       const newCollection = response.data;
-
-      if (newCollection.isDefault) {
-        setCollections(current =>
-          current.map(collection => ({
-            ...collection,
-            isDefault: false
-          }))
-        );
-      }
-
       setCollections(current => [...current, newCollection]);
+      return newCollection;
     } catch (err) {
       console.error('Error creating collection:', err);
       throw err;
@@ -122,197 +155,139 @@ export function useJournal(): UseJournalResult {
   const updateCollection = async (
     collectionId: string,
     updates: Partial<JournalCollection>
-  ) => {
+  ): Promise<JournalCollection> => {
     try {
-      const response = await api.put(`/journal/collections/${collectionId}`, updates);
+      const response = await api.put(
+        `/journal/collections/${collectionId}`,
+        updates
+      );
       const updatedCollection = response.data;
-
-      if (updatedCollection.isDefault) {
-        setCollections(current =>
-          current.map(collection => ({
-            ...collection,
-            isDefault: collection.id === collectionId
-          }))
-        );
-      } else {
-        setCollections(current =>
-          current.map(collection =>
-            collection.id === collectionId ? updatedCollection : collection
-          )
-        );
-      }
+      setCollections(current =>
+        current.map(collection =>
+          collection.id === collectionId ? updatedCollection : collection
+        )
+      );
+      return updatedCollection;
     } catch (err) {
       console.error('Error updating collection:', err);
       throw err;
     }
   };
 
-  const deleteCollection = async (collectionId: string) => {
+  const addEntryToCollection = async (
+    entryId: string,
+    collectionId: string
+  ): Promise<JournalCollection> => {
     try {
-      await api.delete(`/journal/collections/${collectionId}`);
-      setCollections(current =>
-        current.filter(collection => collection.id !== collectionId)
+      const response = await api.post(
+        `/journal/collections/${collectionId}/entries/${entryId}`
       );
-    } catch (err) {
-      console.error('Error deleting collection:', err);
-      throw err;
-    }
-  };
-
-  const addEntryToCollection = async (entryId: string, collectionId: string) => {
-    try {
-      await api.post(`/journal/collections/${collectionId}/entries/${entryId}`);
+      const updatedCollection = response.data;
       setCollections(current =>
         current.map(collection =>
-          collection.id === collectionId
-            ? {
-                ...collection,
-                entries: [...collection.entries, entryId]
-              }
-            : collection
+          collection.id === collectionId ? updatedCollection : collection
         )
       );
+      return updatedCollection;
     } catch (err) {
       console.error('Error adding entry to collection:', err);
       throw err;
     }
   };
 
-  const removeEntryFromCollection = async (entryId: string, collectionId: string) => {
+  const removeEntryFromCollection = async (
+    entryId: string,
+    collectionId: string
+  ): Promise<JournalCollection> => {
     try {
-      await api.delete(`/journal/collections/${collectionId}/entries/${entryId}`);
+      const response = await api.delete(
+        `/journal/collections/${collectionId}/entries/${entryId}`
+      );
+      const updatedCollection = response.data;
       setCollections(current =>
         current.map(collection =>
-          collection.id === collectionId
-            ? {
-                ...collection,
-                entries: collection.entries.filter(id => id !== entryId)
-              }
-            : collection
+          collection.id === collectionId ? updatedCollection : collection
         )
       );
+      return updatedCollection;
     } catch (err) {
       console.error('Error removing entry from collection:', err);
       throw err;
     }
   };
 
+  const searchEntries = async (filter: JournalFilter): Promise<void> => {
+    await fetchEntries(filter);
+  };
+
+  const refreshData = async (): Promise<void> => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        fetchEntries(),
+        fetchCollections(),
+        fetchTemplates(),
+        fetchStats()
+      ]);
+      setError(null);
+    } catch (err) {
+      setError('Failed to refresh journal data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchData();
+    refreshData();
 
     // Set up WebSocket listeners for real-time updates
     const socket = api.socket;
 
-    socket.on('entryCreated', (entry: JournalEntry) => {
-      setEntries(current => [...current, entry]);
+    socket.on('entry:created', ({ entryId }) => {
+      fetchEntries();
+      fetchStats();
     });
 
-    socket.on('entryUpdated', (entry: JournalEntry) => {
-      setEntries(current =>
-        current.map(e => (e.id === entry.id ? entry : e))
-      );
+    socket.on('entry:updated', ({ entryId }) => {
+      fetchEntries();
     });
 
-    socket.on('entryDeleted', ({ entryId }: { entryId: string }) => {
-      setEntries(current =>
-        current.filter(entry => entry.id !== entryId)
-      );
-      setCollections(current =>
-        current.map(collection => ({
-          ...collection,
-          entries: collection.entries.filter(id => id !== entryId)
-        }))
-      );
+    socket.on('entry:deleted', ({ entryId }) => {
+      fetchEntries();
+      fetchStats();
     });
 
-    socket.on('collectionCreated', (collection: JournalCollection) => {
-      if (collection.isDefault) {
-        setCollections(current =>
-          current.map(c => ({ ...c, isDefault: false }))
-        );
-      }
-      setCollections(current => [...current, collection]);
+    socket.on('collection:created', ({ collectionId }) => {
+      fetchCollections();
     });
 
-    socket.on('collectionUpdated', (collection: JournalCollection) => {
-      if (collection.isDefault) {
-        setCollections(current =>
-          current.map(c => ({
-            ...c,
-            isDefault: c.id === collection.id
-          }))
-        );
-      } else {
-        setCollections(current =>
-          current.map(c => (c.id === collection.id ? collection : c))
-        );
-      }
+    socket.on('collection:updated', ({ collectionId }) => {
+      fetchCollections();
     });
 
-    socket.on('collectionDeleted', ({ collectionId }: { collectionId: string }) => {
-      setCollections(current =>
-        current.filter(collection => collection.id !== collectionId)
-      );
+    socket.on('collection:entry-added', ({ collectionId }) => {
+      fetchCollections();
     });
 
-    socket.on('entryAddedToCollection', ({
-      entryId,
-      collectionId
-    }: {
-      entryId: string;
-      collectionId: string;
-    }) => {
-      setCollections(current =>
-        current.map(collection =>
-          collection.id === collectionId
-            ? {
-                ...collection,
-                entries: [...collection.entries, entryId]
-              }
-            : collection
-        )
-      );
-    });
-
-    socket.on('entryRemovedFromCollection', ({
-      entryId,
-      collectionId
-    }: {
-      entryId: string;
-      collectionId: string;
-    }) => {
-      setCollections(current =>
-        current.map(collection =>
-          collection.id === collectionId
-            ? {
-                ...collection,
-                entries: collection.entries.filter(id => id !== entryId)
-              }
-            : collection
-        )
-      );
-    });
-
-    socket.on('statsUpdated', ({ stats: newStats }: { stats: JournalStats }) => {
-      setStats(newStats);
+    socket.on('collection:entry-removed', ({ collectionId }) => {
+      fetchCollections();
     });
 
     return () => {
-      socket.off('entryCreated');
-      socket.off('entryUpdated');
-      socket.off('entryDeleted');
-      socket.off('collectionCreated');
-      socket.off('collectionUpdated');
-      socket.off('collectionDeleted');
-      socket.off('entryAddedToCollection');
-      socket.off('entryRemovedFromCollection');
-      socket.off('statsUpdated');
+      socket.off('entry:created');
+      socket.off('entry:updated');
+      socket.off('entry:deleted');
+      socket.off('collection:created');
+      socket.off('collection:updated');
+      socket.off('collection:entry-added');
+      socket.off('collection:entry-removed');
     };
   }, []);
 
   return {
     entries,
     collections,
+    templates,
     stats,
     loading,
     error,
@@ -321,9 +296,9 @@ export function useJournal(): UseJournalResult {
     deleteEntry,
     createCollection,
     updateCollection,
-    deleteCollection,
     addEntryToCollection,
     removeEntryFromCollection,
-    refreshData: fetchData
+    searchEntries,
+    refreshData
   };
 }
