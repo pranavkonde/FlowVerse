@@ -1,63 +1,113 @@
-export interface Crop {
-  id: string;
-  name: string;
-  description: string;
-  growthTime: number;
-  stages: {
-    name: string;
-    duration: number;
-    imageUrl: string;
-  }[];
-  requirements: {
-    level: number;
-    tools?: string[];
-    items?: { id: string; quantity: number }[];
-  };
-  yield: {
-    itemId: string;
-    name: string;
-    baseQuantity: number;
-    qualityMultiplier: number;
-  };
-  wateringInterval: number;
-  fertilizable: boolean;
-  harvestable: boolean;
-  season: 'spring' | 'summer' | 'fall' | 'winter' | 'all';
-}
-
-export interface Plot {
+export interface FarmPlot {
   id: string;
   ownerId: string;
   position: { x: number; y: number };
-  status: 'empty' | 'tilled' | 'planted' | 'ready';
-  crop?: {
-    id: string;
-    plantedAt: Date;
-    lastWatered: Date;
-    lastFertilized?: Date;
-    currentStage: number;
-    quality: number;
-    diseased: boolean;
-  };
+  crop?: Crop;
+  soil: SoilType;
+  moisture: number;
+  fertility: number;
+  status: PlotStatus;
+  lastWatered?: string;
+  lastFertilized?: string;
 }
 
-export const PLOT_STATUS_COLORS = {
-  empty: 'gray',
-  tilled: 'brown',
-  planted: 'green',
-  ready: 'yellow'
-} as const;
+export interface Crop {
+  id: string;
+  name: string;
+  type: CropType;
+  growthStage: GrowthStage;
+  plantedAt: string;
+  harvestableAt: string;
+  quality: CropQuality;
+  diseased: boolean;
+  waterNeeded: number;
+  fertilityNeeded: number;
+}
 
-export const SEASON_COLORS = {
-  spring: ['#90EE90', '#98FB98'],
-  summer: ['#FFD700', '#FFA500'],
-  fall: ['#D2691E', '#CD853F'],
-  winter: ['#87CEEB', '#B0E0E6']
-} as const;
+export type SoilType =
+  | 'BASIC'
+  | 'FERTILE'
+  | 'RICH'
+  | 'SANDY'
+  | 'CLAY'
+  | 'LOAMY';
 
-export const QUALITY_LEVELS = {
-  poor: { min: 0, max: 30, color: 'red' },
-  average: { min: 31, max: 60, color: 'yellow' },
-  good: { min: 61, max: 90, color: 'green' },
-  excellent: { min: 91, max: 100, color: 'blue' }
-} as const;
+export type PlotStatus =
+  | 'EMPTY'
+  | 'TILLED'
+  | 'PLANTED'
+  | 'GROWING'
+  | 'HARVESTABLE'
+  | 'DISEASED';
+
+export type CropType =
+  | 'VEGETABLE'
+  | 'FRUIT'
+  | 'GRAIN'
+  | 'HERB'
+  | 'FLOWER'
+  | 'MAGICAL';
+
+export type GrowthStage =
+  | 'SEED'
+  | 'SPROUT'
+  | 'GROWING'
+  | 'FLOWERING'
+  | 'MATURE';
+
+export type CropQuality =
+  | 'POOR'
+  | 'NORMAL'
+  | 'GOOD'
+  | 'EXCELLENT'
+  | 'PERFECT';
+
+export interface FarmingTool {
+  id: string;
+  name: string;
+  type: ToolType;
+  durability: number;
+  efficiency: number;
+  bonusEffects: ToolBonus[];
+}
+
+export type ToolType =
+  | 'HOE'
+  | 'WATERING_CAN'
+  | 'FERTILIZER'
+  | 'PESTICIDE'
+  | 'HARVEST_BASKET';
+
+export interface ToolBonus {
+  type: BonusType;
+  value: number;
+}
+
+export type BonusType =
+  | 'GROWTH_SPEED'
+  | 'WATER_RETENTION'
+  | 'FERTILITY_BOOST'
+  | 'DISEASE_RESISTANCE'
+  | 'YIELD_INCREASE';
+
+export interface CropTemplate {
+  name: string;
+  type: CropType;
+  growthTime: number; // in minutes
+  waterNeeded: number;
+  fertilityNeeded: number;
+  seasonalBonus: Season[];
+  possibleYield: { min: number; max: number };
+  value: number;
+}
+
+export type Season = 'SPRING' | 'SUMMER' | 'FALL' | 'WINTER';
+
+export interface FarmingStats {
+  totalHarvests: number;
+  cropsByType: Record<CropType, number>;
+  qualityAchieved: Record<CropQuality, number>;
+  diseaseRate: number;
+  perfectCrops: number;
+  totalEarnings: number;
+}

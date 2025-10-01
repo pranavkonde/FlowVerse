@@ -1,323 +1,231 @@
 import React, { useState } from 'react';
-import { Plot, Crop, PLOT_STATUS_COLORS, SEASON_COLORS, QUALITY_LEVELS } from '../../types/farming';
 import { useFarming } from '../../hooks/useFarming';
+import { FarmPlot, CropTemplate, PlotStatus, GrowthStage } from '../../types/farming';
 
-export const FarmingSystem: React.FC = () => {
-  const [selectedPlot, setSelectedPlot] = useState<Plot | null>(null);
-  const [selectedCrop, setSelectedCrop] = useState<Crop | null>(null);
+const GROWTH_STAGE_ICONS = {
+  SEED: '🌱',
+  SPROUT: '🌿',
+  GROWING: '🌾',
+  FLOWERING: '🌸',
+  MATURE: '🌽'
+};
+
+const PLOT_STATUS_COLORS = {
+  EMPTY: 'bg-gray-700',
+  TILLED: 'bg-brown-600',
+  PLANTED: 'bg-green-900',
+  GROWING: 'bg-green-700',
+  HARVESTABLE: 'bg-yellow-600',
+  DISEASED: 'bg-red-900'
+};
+
+export function FarmingSystem() {
   const {
     plots,
     availableCrops,
+    stats,
     loading,
     error,
     createPlot,
     tillPlot,
     plantCrop,
-    waterCrop,
-    fertilizeCrop,
+    waterPlot,
+    fertilizePlot,
     harvestCrop
   } = useFarming();
 
+  const [selectedPlot, setSelectedPlot] = useState<FarmPlot | null>(null);
+  const [selectedCrop, setSelectedCrop] = useState<CropTemplate | null>(null);
+  const [showStats, setShowStats] = useState(false);
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center p-4">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <div className="p-4">Loading farming system...</div>;
   }
 
   if (error) {
-    return (
-      <div className="p-4 text-red-500">
-        Error loading farming system: {error}
-      </div>
-    );
+    return <div className="p-4 text-red-500">{error}</div>;
   }
 
+  const handlePlotAction = async (plot: FarmPlot) => {
+    try {
+      if (plot.status === 'EMPTY') {
+        await tillPlot(plot.id, 'basic-hoe'); // Using a basic tool ID
+      } else if (plot.status === 'TILLED' && selectedCrop) {
+        await plantCrop(plot.id, selectedCrop.name);
+        setSelectedCrop(null);
+      } else if (plot.status === 'PLANTED' || plot.status === 'GROWING') {
+        if (plot.moisture < 70) {
+          await waterPlot(plot.id, 'basic-watering-can');
+        }
+        if (plot.fertility < 70) {
+          await fertilizePlot(plot.id, 'basic-fertilizer');
+        }
+      } else if (plot.status === 'HARVESTABLE') {
+        const result = await harvestCrop(plot.id, 'basic-basket');
+        // Show harvest result notification
+        alert(`Harvested ${result.yield} crops of ${result.quality} quality!`);
+      }
+    } catch (err) {
+      console.error('Error performing plot action:', err);
+    }
+  };
+
+  const renderPlot = (plot: FarmPlot) => (
+    <div
+      key={plot.id}
+      className={`
+        ${PLOT_STATUS_COLORS[plot.status]}
+        w-24 h-24 rounded-lg m-2 cursor-pointer
+        flex flex-col items-center justify-center
+        transition-all duration-200
+        hover:ring-2 hover:ring-blue-500
+        ${selectedPlot?.id === plot.id ? 'ring-2 ring-blue-500' : ''}
+      `}
+      onClick={() => setSelectedPlot(plot)}
+      onDoubleClick={() => handlePlotAction(plot)}
+    >
+      {plot.crop && (
+        <div className="text-2xl">
+          {GROWTH_STAGE_ICONS[plot.crop.growthStage]}
+        </div>
+      )}
+      <div className="text-xs text-white mt-1">
+        {plot.status}
+      </div>
+      {(plot.status === 'PLANTED' || plot.status === 'GROWING') && (
+        <div className="flex space-x-1 mt-1">
+          <div
+            className="w-2 h-4 bg-blue-500 rounded"
+            style={{ height: `${plot.moisture / 25}rem` }}
+          />
+          <div
+            className="w-2 h-4 bg-green-500 rounded"
+            style={{ height: `${plot.fertility / 25}rem` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  const renderStats = () => (
+    <div className="bg-gray-800 rounded-lg p-4 mb-4">
+      <h2 className="text-xl font-bold text-white mb-2">Farming Stats</h2>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="text-white">
+          <span className="block text-gray-400">Total Harvests</span>
+          {stats.totalHarvests}
+        </div>
+        <div className="text-white">
+          <span className="block text-gray-400">Perfect Crops</span>
+          {stats.perfectCrops}
+        </div>
+        <div className="text-white">
+          <span className="block text-gray-400">Total Earnings</span>
+          {stats.totalEarnings} coins
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderCropSelection = () => (
+    <div className="bg-gray-800 rounded-lg p-4 mb-4">
+      <h2 className="text-xl font-bold text-white mb-2">Available Crops</h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {availableCrops.map(crop => (
+          <div
+            key={crop.name}
+            className={`
+              bg-gray-700 rounded p-2 cursor-pointer
+              ${selectedCrop?.name === crop.name ? 'ring-2 ring-blue-500' : ''}
+            `}
+            onClick={() => setSelectedCrop(crop)}
+          >
+            <div className="text-white font-semibold">{crop.name}</div>
+            <div className="text-sm text-gray-400">
+              Growth: {crop.growthTime}m
+            </div>
+            <div className="text-sm text-gray-400">
+              Value: {crop.value} coins
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-white">Your Farm</h2>
+    <div className="p-4">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold text-white">Your Farm</h1>
         <button
-          onClick={() => createPlot({ x: 0, y: 0 })}
-          className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark"
+          onClick={() => setShowStats(!showStats)}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
         >
-          Create New Plot
+          {showStats ? 'Hide Stats' : 'Show Stats'}
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <h3 className="text-xl font-semibold text-white mb-4">Your Plots</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {plots.map((plot) => (
-              <PlotCard
-                key={plot.id}
-                plot={plot}
-                onClick={() => setSelectedPlot(plot)}
-              />
-            ))}
-          </div>
-        </div>
+      {showStats && renderStats()}
+      {renderCropSelection()}
 
-        <div>
-          <h3 className="text-xl font-semibold text-white mb-4">Available Crops</h3>
-          <div className="grid grid-cols-2 gap-4">
-            {availableCrops.map((crop) => (
-              <CropCard
-                key={crop.id}
-                crop={crop}
-                onClick={() => setSelectedCrop(crop)}
-              />
-            ))}
-          </div>
+      <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+        {plots.map(renderPlot)}
+        <div
+          className="w-24 h-24 border-2 border-dashed border-gray-600 rounded-lg m-2 flex items-center justify-center cursor-pointer hover:border-blue-500"
+          onClick={() => createPlot({ x: plots.length * 2, y: 0 })}
+        >
+          <span className="text-2xl text-gray-600">+</span>
         </div>
       </div>
 
       {selectedPlot && (
-        <PlotModal
-          plot={selectedPlot}
-          selectedCrop={selectedCrop}
-          onClose={() => {
-            setSelectedPlot(null);
-            setSelectedCrop(null);
-          }}
-          onTill={(toolId) => tillPlot(selectedPlot.id, toolId)}
-          onPlant={() => selectedCrop && plantCrop(selectedPlot.id, selectedCrop.id)}
-          onWater={() => waterCrop(selectedPlot.id)}
-          onFertilize={(fertilizerId) => fertilizeCrop(selectedPlot.id, fertilizerId)}
-          onHarvest={() => harvestCrop(selectedPlot.id)}
-        />
-      )}
-    </div>
-  );
-};
-
-const PlotCard: React.FC<{
-  plot: Plot;
-  onClick: () => void;
-}> = ({ plot, onClick }) => {
-  const statusColor = PLOT_STATUS_COLORS[plot.status];
-  
-  return (
-    <div
-      onClick={onClick}
-      className={`bg-${statusColor}-700 rounded-lg p-4 cursor-pointer hover:bg-${statusColor}-600 transition-colors`}
-    >
-      <div className="relative h-32">
-        {plot.crop && (
-          <img
-            src={plot.crop.currentStage >= 0 ? plot.crop.stages[plot.crop.currentStage].imageUrl : ''}
-            alt="Crop"
-            className="absolute inset-0 w-full h-full object-cover rounded"
-          />
-        )}
-        <div className="absolute top-2 right-2">
-          <span className={`px-2 py-1 rounded text-sm bg-${statusColor}-500 text-white`}>
-            {plot.status}
-          </span>
-        </div>
-      </div>
-
-      {plot.crop && (
-        <div className="mt-2 space-y-1">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-300">Quality:</span>
-            <span className={`text-${getQualityColor(plot.crop.quality)}-400`}>
-              {plot.crop.quality}%
-            </span>
+        <div className="mt-4 bg-gray-800 rounded-lg p-4">
+          <h2 className="text-xl font-bold text-white mb-2">Plot Details</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="text-white">
+              <span className="block text-gray-400">Status</span>
+              {selectedPlot.status}
+            </div>
+            <div className="text-white">
+              <span className="block text-gray-400">Soil Type</span>
+              {selectedPlot.soil}
+            </div>
+            <div className="text-white">
+              <span className="block text-gray-400">Moisture</span>
+              {selectedPlot.moisture}%
+            </div>
+            <div className="text-white">
+              <span className="block text-gray-400">Fertility</span>
+              {selectedPlot.fertility}%
+            </div>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-300">Stage:</span>
-            <span className="text-white">
-              {plot.crop.stages[plot.crop.currentStage].name}
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const CropCard: React.FC<{
-  crop: Crop;
-  onClick: () => void;
-}> = ({ crop, onClick }) => {
-  const seasonColors = SEASON_COLORS[crop.season as keyof typeof SEASON_COLORS] || SEASON_COLORS.spring;
-  
-  return (
-    <div
-      onClick={onClick}
-      className="bg-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-600 transition-colors"
-      style={{
-        background: `linear-gradient(135deg, ${seasonColors.join(', ')})`
-      }}
-    >
-      <div className="relative h-24">
-        <img
-          src={crop.stages[0].imageUrl}
-          alt={crop.name}
-          className="absolute inset-0 w-full h-full object-cover rounded"
-        />
-        <div className="absolute top-2 right-2">
-          <span className="px-2 py-1 rounded text-sm bg-black bg-opacity-50 text-white">
-            {crop.season}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-2">
-        <h4 className="text-lg font-semibold text-white">{crop.name}</h4>
-        <p className="text-sm text-gray-200">{crop.description}</p>
-        
-        <div className="mt-2 space-y-1 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-200">Growth Time:</span>
-            <span className="text-white">{formatTime(crop.growthTime)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-200">Yield:</span>
-            <span className="text-white">{crop.yield.baseQuantity}x {crop.yield.name}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const PlotModal: React.FC<{
-  plot: Plot;
-  selectedCrop: Crop | null;
-  onClose: () => void;
-  onTill: (toolId: string) => Promise<void>;
-  onPlant: () => Promise<void>;
-  onWater: () => Promise<void>;
-  onFertilize: (fertilizerId: string) => Promise<void>;
-  onHarvest: () => Promise<void>;
-}> = ({
-  plot,
-  selectedCrop,
-  onClose,
-  onTill,
-  onPlant,
-  onWater,
-  onFertilize,
-  onHarvest
-}) => {
-  const [loading, setLoading] = useState(false);
-
-  const handleAction = async (action: () => Promise<void>) => {
-    setLoading(true);
-    try {
-      await action();
-      onClose();
-    } catch (error) {
-      console.error('Action failed:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 max-w-lg w-full">
-        <div className="flex justify-between items-start mb-4">
-          <h3 className="text-xl font-bold text-white">
-            Plot {plot.position.x}, {plot.position.y}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          {plot.status === 'empty' && (
-            <button
-              onClick={() => handleAction(() => onTill('basic_hoe'))}
-              disabled={loading}
-              className="w-full px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark disabled:opacity-50"
-            >
-              {loading ? 'Tilling...' : 'Till Plot'}
-            </button>
-          )}
-
-          {plot.status === 'tilled' && selectedCrop && (
-            <button
-              onClick={() => handleAction(onPlant)}
-              disabled={loading}
-              className="w-full px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark disabled:opacity-50"
-            >
-              {loading ? 'Planting...' : `Plant ${selectedCrop.name}`}
-            </button>
-          )}
-
-          {plot.status === 'planted' && plot.crop && (
-            <>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Growth Progress:</span>
-                  <span className="text-white">
-                    Stage {plot.crop.currentStage + 1} of {plot.crop.stages.length}
-                  </span>
+          {selectedPlot.crop && (
+            <div className="mt-4">
+              <h3 className="text-lg font-semibold text-white mb-2">
+                Crop Information
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-white">
+                  <span className="block text-gray-400">Name</span>
+                  {selectedPlot.crop.name}
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Quality:</span>
-                  <span className={`text-${getQualityColor(plot.crop.quality)}-400`}>
-                    {plot.crop.quality}%
-                  </span>
+                <div className="text-white">
+                  <span className="block text-gray-400">Growth Stage</span>
+                  {selectedPlot.crop.growthStage}
+                </div>
+                <div className="text-white">
+                  <span className="block text-gray-400">Planted</span>
+                  {new Date(selectedPlot.crop.plantedAt).toLocaleDateString()}
+                </div>
+                <div className="text-white">
+                  <span className="block text-gray-400">Harvestable</span>
+                  {new Date(selectedPlot.crop.harvestableAt).toLocaleDateString()}
                 </div>
               </div>
-
-              <button
-                onClick={() => handleAction(onWater)}
-                disabled={loading}
-                className="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-              >
-                {loading ? 'Watering...' : 'Water Crop'}
-              </button>
-
-              <button
-                onClick={() => handleAction(() => onFertilize('basic_fertilizer'))}
-                disabled={loading}
-                className="w-full px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-              >
-                {loading ? 'Fertilizing...' : 'Apply Fertilizer'}
-              </button>
-            </>
-          )}
-
-          {plot.status === 'ready' && (
-            <button
-              onClick={() => handleAction(onHarvest)}
-              disabled={loading}
-              className="w-full px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
-            >
-              {loading ? 'Harvesting...' : 'Harvest Crop'}
-            </button>
+            </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
-};
-
-function getQualityColor(quality: number): string {
-  for (const [level, { min, max, color }] of Object.entries(QUALITY_LEVELS)) {
-    if (quality >= min && quality <= max) {
-      return color;
-    }
-  }
-  return QUALITY_LEVELS.poor.color;
-}
-
-function formatTime(ms: number): string {
-  const minutes = Math.floor(ms / 60000);
-  if (minutes < 60) {
-    return `${minutes}m`;
-  }
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
 }

@@ -1,24 +1,42 @@
 import { useState, useEffect } from 'react';
-import { Plot, Crop } from '../types/farming';
+import {
+  FarmPlot,
+  CropTemplate,
+  FarmingStats,
+  CropQuality
+} from '../types/farming';
 import { api } from '../services/api';
 
 interface UseFarmingResult {
-  plots: Plot[];
-  availableCrops: Crop[];
+  plots: FarmPlot[];
+  availableCrops: CropTemplate[];
+  stats: FarmingStats;
   loading: boolean;
   error: string | null;
-  createPlot: (position: { x: number; y: number }) => Promise<void>;
-  tillPlot: (plotId: string, toolId: string) => Promise<void>;
-  plantCrop: (plotId: string, cropId: string) => Promise<void>;
-  waterCrop: (plotId: string) => Promise<void>;
-  fertilizeCrop: (plotId: string, fertilizerId: string) => Promise<void>;
-  harvestCrop: (plotId: string) => Promise<void>;
+  createPlot: (position: { x: number; y: number }) => Promise<FarmPlot>;
+  tillPlot: (plotId: string, toolId: string) => Promise<FarmPlot>;
+  plantCrop: (plotId: string, cropName: string) => Promise<FarmPlot>;
+  waterPlot: (plotId: string, toolId: string) => Promise<FarmPlot>;
+  fertilizePlot: (plotId: string, toolId: string) => Promise<FarmPlot>;
+  harvestCrop: (plotId: string, toolId: string) => Promise<{
+    plot: FarmPlot;
+    yield: number;
+    quality: CropQuality;
+  }>;
   refreshPlots: () => Promise<void>;
 }
 
 export function useFarming(): UseFarmingResult {
-  const [plots, setPlots] = useState<Plot[]>([]);
-  const [availableCrops, setAvailableCrops] = useState<Crop[]>([]);
+  const [plots, setPlots] = useState<FarmPlot[]>([]);
+  const [availableCrops, setAvailableCrops] = useState<CropTemplate[]>([]);
+  const [stats, setStats] = useState<FarmingStats>({
+    totalHarvests: 0,
+    cropsByType: {},
+    qualityAchieved: {},
+    diseaseRate: 0,
+    perfectCrops: 0,
+    totalEarnings: 0
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,139 +46,116 @@ export function useFarming(): UseFarmingResult {
       setPlots(response.data);
       setError(null);
     } catch (err) {
-      setError('Failed to load plots');
       console.error('Error fetching plots:', err);
+      setError('Failed to load farm plots');
     }
   };
 
-  const fetchCrops = async () => {
+  const fetchAvailableCrops = async () => {
     try {
-      // Get current season based on system time
-      const seasons = ['spring', 'summer', 'fall', 'winter'];
-      const currentMonth = new Date().getMonth();
-      const currentSeason = seasons[Math.floor(currentMonth / 3)];
-
-      const response = await api.get(`/farming/crops?season=${currentSeason}`);
+      const response = await api.get('/farming/crops/available');
       setAvailableCrops(response.data);
     } catch (err) {
-      console.error('Error fetching crops:', err);
-      // Don't set error here as it's not critical
+      console.error('Error fetching available crops:', err);
     }
   };
 
-  const createPlot = async (position: { x: number; y: number }) => {
+  const fetchStats = async () => {
+    try {
+      const response = await api.get('/farming/stats');
+      setStats(response.data);
+    } catch (err) {
+      console.error('Error fetching farming stats:', err);
+    }
+  };
+
+  const createPlot = async (position: { x: number; y: number }): Promise<FarmPlot> => {
     try {
       const response = await api.post('/farming/plots', { position });
-      setPlots(current => [...current, response.data]);
+      const newPlot = response.data;
+      setPlots(current => [...current, newPlot]);
+      return newPlot;
     } catch (err) {
       console.error('Error creating plot:', err);
       throw err;
     }
   };
 
-  const tillPlot = async (plotId: string, toolId: string) => {
+  const tillPlot = async (plotId: string, toolId: string): Promise<FarmPlot> => {
     try {
-      await api.post('/farming/till', { plotId, toolId });
+      const response = await api.post('/farming/plots/till', { plotId, toolId });
+      const updatedPlot = response.data;
       setPlots(current =>
         current.map(plot =>
-          plot.id === plotId
-            ? { ...plot, status: 'tilled' }
-            : plot
+          plot.id === plotId ? updatedPlot : plot
         )
       );
+      return updatedPlot;
     } catch (err) {
       console.error('Error tilling plot:', err);
       throw err;
     }
   };
 
-  const plantCrop = async (plotId: string, cropId: string) => {
+  const plantCrop = async (plotId: string, cropName: string): Promise<FarmPlot> => {
     try {
-      await api.post('/farming/plant', { plotId, cropId });
-      
-      const crop = availableCrops.find(c => c.id === cropId);
-      if (!crop) throw new Error('Crop not found');
-
+      const response = await api.post('/farming/plots/plant', { plotId, cropName });
+      const updatedPlot = response.data;
       setPlots(current =>
         current.map(plot =>
-          plot.id === plotId
-            ? {
-                ...plot,
-                status: 'planted',
-                crop: {
-                  id: cropId,
-                  plantedAt: new Date(),
-                  lastWatered: new Date(),
-                  currentStage: 0,
-                  quality: 100,
-                  diseased: false
-                }
-              }
-            : plot
+          plot.id === plotId ? updatedPlot : plot
         )
       );
+      return updatedPlot;
     } catch (err) {
       console.error('Error planting crop:', err);
       throw err;
     }
   };
 
-  const waterCrop = async (plotId: string) => {
+  const waterPlot = async (plotId: string, toolId: string): Promise<FarmPlot> => {
     try {
-      await api.post('/farming/water', { plotId });
+      const response = await api.post('/farming/plots/water', { plotId, toolId });
+      const updatedPlot = response.data;
       setPlots(current =>
         current.map(plot =>
-          plot.id === plotId && plot.crop
-            ? {
-                ...plot,
-                crop: {
-                  ...plot.crop,
-                  lastWatered: new Date(),
-                  quality: Math.min(100, plot.crop.quality + 5)
-                }
-              }
-            : plot
+          plot.id === plotId ? updatedPlot : plot
         )
       );
+      return updatedPlot;
     } catch (err) {
-      console.error('Error watering crop:', err);
+      console.error('Error watering plot:', err);
       throw err;
     }
   };
 
-  const fertilizeCrop = async (plotId: string, fertilizerId: string) => {
+  const fertilizePlot = async (plotId: string, toolId: string): Promise<FarmPlot> => {
     try {
-      await api.post('/farming/fertilize', { plotId, fertilizerId });
+      const response = await api.post('/farming/plots/fertilize', { plotId, toolId });
+      const updatedPlot = response.data;
       setPlots(current =>
         current.map(plot =>
-          plot.id === plotId && plot.crop
-            ? {
-                ...plot,
-                crop: {
-                  ...plot.crop,
-                  lastFertilized: new Date(),
-                  quality: Math.min(100, plot.crop.quality + 10)
-                }
-              }
-            : plot
+          plot.id === plotId ? updatedPlot : plot
         )
       );
+      return updatedPlot;
     } catch (err) {
-      console.error('Error fertilizing crop:', err);
+      console.error('Error fertilizing plot:', err);
       throw err;
     }
   };
 
-  const harvestCrop = async (plotId: string) => {
+  const harvestCrop = async (plotId: string, toolId: string) => {
     try {
-      await api.post('/farming/harvest', { plotId });
+      const response = await api.post('/farming/plots/harvest', { plotId, toolId });
+      const result = response.data;
       setPlots(current =>
         current.map(plot =>
-          plot.id === plotId
-            ? { ...plot, status: 'empty', crop: undefined }
-            : plot
+          plot.id === plotId ? result.plot : plot
         )
       );
+      await fetchStats(); // Refresh stats after harvest
+      return result;
     } catch (err) {
       console.error('Error harvesting crop:', err);
       throw err;
@@ -168,88 +163,84 @@ export function useFarming(): UseFarmingResult {
   };
 
   useEffect(() => {
-    const loadData = async () => {
+    const loadInitialData = async () => {
       setLoading(true);
       try {
-        await Promise.all([fetchPlots(), fetchCrops()]);
+        await Promise.all([
+          fetchPlots(),
+          fetchAvailableCrops(),
+          fetchStats()
+        ]);
       } finally {
         setLoading(false);
       }
     };
 
-    loadData();
+    loadInitialData();
 
     // Set up WebSocket listeners for real-time updates
     const socket = api.socket;
 
-    socket.on('plotUpdated', (updatedPlot: Plot) => {
+    socket.on('plot:updated', ({ plotId, plot }) => {
       setPlots(current =>
-        current.map(plot =>
-          plot.id === updatedPlot.id ? updatedPlot : plot
-        )
+        current.map(p => (p.id === plotId ? plot : p))
       );
     });
 
-    socket.on('cropStageChanged', ({ plotId, stage }: { plotId: string; stage: number }) => {
+    socket.on('crop:stage-changed', ({ plotId, stage }) => {
       setPlots(current =>
         current.map(plot =>
           plot.id === plotId && plot.crop
-            ? {
-                ...plot,
-                crop: {
-                  ...plot.crop,
-                  currentStage: stage
-                }
-              }
+            ? { ...plot, crop: { ...plot.crop, growthStage: stage } }
             : plot
         )
       );
     });
 
-    socket.on('cropNeedsWater', ({ plotId }: { plotId: string }) => {
-      setPlots(current =>
-        current.map(plot =>
-          plot.id === plotId && plot.crop
-            ? {
-                ...plot,
-                crop: {
-                  ...plot.crop,
-                  quality: Math.max(0, plot.crop.quality - 10)
-                }
-              }
-            : plot
-        )
-      );
-    });
-
-    socket.on('cropReady', ({ plotId }: { plotId: string }) => {
+    socket.on('crop:diseased', ({ plotId }) => {
       setPlots(current =>
         current.map(plot =>
           plot.id === plotId
-            ? { ...plot, status: 'ready' }
+            ? { ...plot, status: 'DISEASED', crop: plot.crop ? { ...plot.crop, diseased: true } : undefined }
             : plot
         )
       );
     });
 
+    socket.on('crop:harvestable', ({ plotId }) => {
+      setPlots(current =>
+        current.map(plot =>
+          plot.id === plotId
+            ? { ...plot, status: 'HARVESTABLE' }
+            : plot
+        )
+      );
+    });
+
+    socket.on('season:changed', () => {
+      fetchAvailableCrops();
+    });
+
     return () => {
-      socket.off('plotUpdated');
-      socket.off('cropStageChanged');
-      socket.off('cropNeedsWater');
-      socket.off('cropReady');
+      socket.off('plot:updated');
+      socket.off('crop:stage-changed');
+      socket.off('crop:diseased');
+      socket.off('crop:harvestable');
+      socket.off('season:changed');
     };
   }, []);
 
   return {
     plots,
     availableCrops,
+    stats,
     loading,
     error,
     createPlot,
     tillPlot,
     plantCrop,
-    waterCrop,
-    fertilizeCrop,
+    waterPlot,
+    fertilizePlot,
     harvestCrop,
     refreshPlots: fetchPlots
   };
