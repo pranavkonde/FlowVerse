@@ -1,613 +1,462 @@
 import { EventEmitter } from 'events';
-import { CraftingService } from './CraftingService';
-import { MiniGameService } from './MiniGameService';
-import { InventoryService } from './InventoryService';
-
-export interface Fish {
-  id: string;
-  name: string;
-  description: string;
-  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
-  size: {
-    min: number;
-    max: number;
-  };
-  weight: {
-    min: number;
-    max: number;
-  };
-  season: 'spring' | 'summer' | 'fall' | 'winter' | 'all';
-  timeOfDay: 'any' | 'day' | 'night' | 'dawn' | 'dusk';
-  habitat: 'river' | 'lake' | 'ocean' | 'pond';
-  difficulty: number; // 1-10
-  value: number;
-  experience: number;
-  catchTime: {
-    min: number;
-    max: number;
-  };
-  requirements: {
-    level: number;
-    rod?: string;
-    bait?: string;
-  };
-  specialEffects?: {
-    type: string;
-    value: number;
-  }[];
-}
-
-export interface FishingSpot {
-  id: string;
-  name: string;
-  description: string;
-  position: { x: number; y: number };
-  habitat: Fish['habitat'];
-  availableFish: string[]; // Fish IDs
-  maxFishers: number;
-  currentFishers: string[]; // User IDs
-  respawnTime: number;
-  lastRespawn: Date;
-  isActive: boolean;
-  requirements: {
-    level: number;
-    quest?: string;
-    item?: string;
-  };
-}
-
-export interface FishingSession {
-  id: string;
-  userId: string;
-  spotId: string;
-  fishId?: string;
-  startTime: Date;
-  endTime?: Date;
-  status: 'casting' | 'waiting' | 'minigame' | 'completed' | 'failed';
-  progress: number;
-  difficulty: number;
-  rodId?: string;
-  baitId?: string;
-  catchTime?: number;
-}
-
-export interface FishingStats {
-  totalCatches: number;
-  rarityCount: Record<string, number>;
-  biggestCatch: {
-    fishId: string;
-    size: number;
-    weight: number;
-    timestamp: Date;
-  };
-  favoriteSpot: {
-    spotId: string;
-    visits: number;
-  };
-  skillLevel: number;
-  experience: number;
-  achievements: string[];
-}
+import {
+  FishingSpot,
+  Fish,
+  FishingEquipment,
+  FishingAttempt,
+  FishingResult,
+  FishingStats,
+  Season,
+  TimeOfDay,
+  WeatherEffect,
+  AttemptStatus,
+  CatchQuality
+} from '../types/fishing';
 
 export class FishingService extends EventEmitter {
-  private static instance: FishingService;
-  private fish: Map<string, Fish> = new Map();
   private spots: Map<string, FishingSpot> = new Map();
-  private sessions: Map<string, FishingSession> = new Map();
+  private fish: Map<string, Fish> = new Map();
+  private equipment: Map<string, FishingEquipment> = new Map();
+  private attempts: Map<string, FishingAttempt> = new Map();
   private userStats: Map<string, FishingStats> = new Map();
+  private currentSeason: Season;
+  private currentTime: TimeOfDay;
+  private currentWeather: WeatherEffect;
 
-  private constructor(
-    private craftingService: CraftingService,
-    private miniGameService: MiniGameService,
-    private inventoryService: InventoryService
-  ) {
+  constructor() {
     super();
-    this.initializeDefaultFish();
-    this.initializeFishingSpots();
-    this.startSpotRespawnTimer();
+    this.currentSeason = this.calculateSeason();
+    this.currentTime = this.calculateTimeOfDay();
+    this.currentWeather = 'CLEAR';
+    this.initializeFishData();
+    this.initializeSpots();
+    this.startTimeAndWeatherCycle();
   }
 
-  static getInstance(
-    craftingService: CraftingService,
-    miniGameService: MiniGameService,
-    inventoryService: InventoryService
-  ): FishingService {
-    if (!FishingService.instance) {
-      FishingService.instance = new FishingService(
-        craftingService,
-        miniGameService,
-        inventoryService
-      );
-    }
-    return FishingService.instance;
+  private calculateSeason(): Season {
+    const month = new Date().getMonth();
+    if (month >= 2 && month <= 4) return 'SPRING';
+    if (month >= 5 && month <= 7) return 'SUMMER';
+    if (month >= 8 && month <= 10) return 'FALL';
+    return 'WINTER';
   }
 
-  private initializeDefaultFish() {
-    const defaultFish: Fish[] = [
+  private calculateTimeOfDay(): TimeOfDay {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 8) return 'DAWN';
+    if (hour >= 8 && hour < 17) return 'DAY';
+    if (hour >= 17 && hour < 20) return 'DUSK';
+    return 'NIGHT';
+  }
+
+  private startTimeAndWeatherCycle(): void {
+    // Update time of day every hour
+    setInterval(() => {
+      this.currentTime = this.calculateTimeOfDay();
+      this.emit('time:changed', { time: this.currentTime });
+    }, 3600000);
+
+    // Update weather randomly every 3 hours
+    setInterval(() => {
+      const weathers: WeatherEffect[] = ['CLEAR', 'CLOUDY', 'RAIN', 'STORM', 'WINDY', 'FOG'];
+      this.currentWeather = weathers[Math.floor(Math.random() * weathers.length)];
+      this.emit('weather:changed', { weather: this.currentWeather });
+    }, 10800000);
+
+    // Check season daily
+    setInterval(() => {
+      const newSeason = this.calculateSeason();
+      if (newSeason !== this.currentSeason) {
+        this.currentSeason = newSeason;
+        this.emit('season:changed', { season: this.currentSeason });
+      }
+    }, 86400000);
+  }
+
+  private initializeFishData(): void {
+    const fishData: Fish[] = [
       {
-        id: 'common_carp',
+        id: 'FISH-1',
         name: 'Common Carp',
-        description: 'A hardy freshwater fish found in most rivers and lakes',
-        rarity: 'common',
+        type: 'COMMON',
+        rarity: 'COMMON',
         size: { min: 30, max: 60 },
         weight: { min: 2, max: 8 },
-        season: 'all',
-        timeOfDay: 'any',
-        habitat: 'river',
-        difficulty: 2,
         value: 10,
-        experience: 20,
-        catchTime: { min: 5000, max: 10000 },
-        requirements: { level: 1 }
+        season: ['SPRING', 'SUMMER', 'FALL'],
+        timeOfDay: ['DAY', 'DUSK'],
+        catchDifficulty: 1,
+        specialEffects: [],
+        description: 'A common freshwater fish found in lakes and ponds',
+        imageUrl: '/images/fish/common-carp.png'
       },
-      {
-        id: 'rainbow_trout',
-        name: 'Rainbow Trout',
-        description: 'A colorful fish known for its fighting spirit',
-        rarity: 'uncommon',
-        size: { min: 20, max: 40 },
-        weight: { min: 1, max: 4 },
-        season: 'spring',
-        timeOfDay: 'dawn',
-        habitat: 'river',
-        difficulty: 4,
-        value: 25,
-        experience: 40,
-        catchTime: { min: 8000, max: 15000 },
-        requirements: {
-          level: 5,
-          rod: 'basic_rod',
-          bait: 'worm'
-        }
-      },
-      {
-        id: 'golden_koi',
-        name: 'Golden Koi',
-        description: 'A rare and beautiful ornamental fish',
-        rarity: 'rare',
-        size: { min: 40, max: 80 },
-        weight: { min: 3, max: 10 },
-        season: 'summer',
-        timeOfDay: 'day',
-        habitat: 'pond',
-        difficulty: 6,
-        value: 100,
-        experience: 80,
-        catchTime: { min: 12000, max: 20000 },
-        requirements: {
-          level: 10,
-          rod: 'quality_rod',
-          bait: 'special_bait'
-        },
-        specialEffects: [
-          { type: 'luck_boost', value: 5 },
-          { type: 'gold_bonus', value: 10 }
-        ]
-      }
-      // Add more fish as needed
+      // Add more fish...
     ];
 
-    defaultFish.forEach(fish => this.fish.set(fish.id, fish));
+    fishData.forEach(fish => this.fish.set(fish.id, fish));
   }
 
-  private initializeFishingSpots() {
-    const defaultSpots: FishingSpot[] = [
+  private initializeSpots(): void {
+    const spots: FishingSpot[] = [
       {
-        id: 'riverside_spot',
-        name: 'Peaceful Riverside',
-        description: 'A calm spot by the river, perfect for beginners',
-        position: { x: 100, y: 100 },
-        habitat: 'river',
-        availableFish: ['common_carp', 'rainbow_trout'],
-        maxFishers: 3,
-        currentFishers: [],
-        respawnTime: 300000, // 5 minutes
-        lastRespawn: new Date(),
-        isActive: true,
-        requirements: { level: 1 }
+        id: 'SPOT-1',
+        name: 'Tranquil Lake',
+        type: 'LAKE',
+        difficulty: 1,
+        availableFish: Array.from(this.fish.values()).filter(f => f.type === 'COMMON'),
+        requiredLevel: 1,
+        requiredEquipment: ['BASIC_ROD'],
+        weatherEffects: ['CLEAR', 'RAIN'],
+        seasonalBonus: ['SPRING', 'SUMMER'],
+        position: { x: 100, y: 100 }
       },
-      {
-        id: 'koi_pond',
-        name: 'Sacred Koi Pond',
-        description: 'A serene pond known for its rare koi fish',
-        position: { x: 200, y: 200 },
-        habitat: 'pond',
-        availableFish: ['golden_koi'],
-        maxFishers: 2,
-        currentFishers: [],
-        respawnTime: 600000, // 10 minutes
-        lastRespawn: new Date(),
-        isActive: true,
-        requirements: {
-          level: 10,
-          quest: 'pond_access'
-        }
-      }
-      // Add more spots as needed
+      // Add more spots...
     ];
 
-    defaultSpots.forEach(spot => this.spots.set(spot.id, spot));
+    spots.forEach(spot => this.spots.set(spot.id, spot));
   }
 
-  private startSpotRespawnTimer() {
-    setInterval(() => {
-      const now = new Date();
-      this.spots.forEach((spot, spotId) => {
-        if (!spot.isActive && (now.getTime() - spot.lastRespawn.getTime()) >= spot.respawnTime) {
-          spot.isActive = true;
-          this.spots.set(spotId, spot);
-          this.emit('spotRespawned', spot);
-        }
-      });
-    }, 60000); // Check every minute
-  }
-
-  async startFishing(
+  public async startFishing(
     userId: string,
     spotId: string,
-    rodId?: string,
-    baitId?: string
-  ): Promise<FishingSession> {
+    equipment: {
+      rod?: string;
+      reel?: string;
+      line?: string;
+      bait?: string;
+      lure?: string;
+    }
+  ): Promise<FishingAttempt> {
     const spot = this.spots.get(spotId);
-    if (!spot || !spot.isActive) {
-      throw new Error('Fishing spot not available');
-    }
-
-    if (spot.currentFishers.length >= spot.maxFishers) {
-      throw new Error('Fishing spot is full');
-    }
-
-    const stats = await this.getStats(userId);
-    if (stats.skillLevel < spot.requirements.level) {
-      throw new Error('Insufficient fishing level');
-    }
-
-    // Check if user has required items
-    // This would integrate with your inventory system
-
-    const session: FishingSession = {
-      id: crypto.randomUUID(),
-      userId,
-      spotId,
-      startTime: new Date(),
-      status: 'casting',
-      progress: 0,
-      difficulty: 1,
-      rodId,
-      baitId
-    };
-
-    spot.currentFishers.push(userId);
-    this.spots.set(spotId, spot);
-    this.sessions.set(session.id, session);
-
-    this.emit('fishingStarted', { session, spot });
-    return session;
-  }
-
-  async cast(sessionId: string): Promise<void> {
-    const session = this.sessions.get(sessionId);
-    if (!session || session.status !== 'casting') {
-      throw new Error('Invalid fishing session');
-    }
-
-    const spot = this.spots.get(session.spotId);
     if (!spot) {
       throw new Error('Fishing spot not found');
     }
 
-    // Calculate which fish is caught based on various factors
-    const fish = await this.calculateCatch(spot, session);
-    if (!fish) {
-      session.status = 'failed';
-      this.sessions.set(sessionId, session);
-      this.emit('fishingFailed', { session, reason: 'No fish bit' });
-      return;
+    // Check cooldown
+    if (
+      spot.cooldown &&
+      spot.lastFished &&
+      Date.now() - new Date(spot.lastFished).getTime() < spot.cooldown
+    ) {
+      throw new Error('Fishing spot is on cooldown');
     }
 
-    session.fishId = fish.id;
-    session.status = 'waiting';
-    session.difficulty = fish.difficulty;
-    session.catchTime = Math.floor(
-      Math.random() * (fish.catchTime.max - fish.catchTime.min) + fish.catchTime.min
-    );
+    const attempt: FishingAttempt = {
+      id: `ATTEMPT-${Date.now()}`,
+      userId,
+      spotId,
+      equipment,
+      startedAt: new Date().toISOString(),
+      status: 'CASTING',
+      progress: 0,
+      difficulty: this.calculateDifficulty(spot)
+    };
 
-    this.sessions.set(sessionId, session);
-    this.emit('fishBit', { session, fish });
+    this.attempts.set(attempt.id, attempt);
+    this.emit('fishing:started', { attemptId: attempt.id });
 
-    // Start catch timer
+    // Simulate fishing process
+    this.simulateFishing(attempt);
+
+    return attempt;
+  }
+
+  private calculateDifficulty(spot: FishingSpot): number {
+    let difficulty = spot.difficulty;
+
+    // Weather effects
+    if (this.currentWeather === 'STORM') difficulty *= 1.5;
+    if (this.currentWeather === 'RAIN') difficulty *= 0.8;
+
+    // Time of day effects
+    if (this.currentTime === 'DAWN' || this.currentTime === 'DUSK') {
+      difficulty *= 0.9;
+    }
+    if (this.currentTime === 'NIGHT') difficulty *= 1.2;
+
+    return difficulty;
+  }
+
+  private async simulateFishing(attempt: FishingAttempt): Promise<void> {
+    // Casting phase
     setTimeout(() => {
-      if (session.status === 'waiting') {
-        session.status = 'failed';
-        this.sessions.set(sessionId, session);
-        this.emit('fishingFailed', { session, reason: 'Too slow' });
+      attempt.status = 'WAITING';
+      this.attempts.set(attempt.id, attempt);
+      this.emit('fishing:status-changed', { attemptId: attempt.id, status: 'WAITING' });
+
+      // Random wait time for fish to bite (3-10 seconds)
+      const biteTime = 3000 + Math.random() * 7000;
+      setTimeout(() => {
+        attempt.status = 'BITING';
+        this.attempts.set(attempt.id, attempt);
+        this.emit('fishing:status-changed', { attemptId: attempt.id, status: 'BITING' });
+
+        // Give player 2 seconds to respond to bite
+        setTimeout(() => {
+          if (attempt.status === 'BITING') {
+            this.failAttempt(attempt);
+          }
+        }, 2000);
+      }, biteTime);
+    }, 1000);
+  }
+
+  public async respondToBite(attemptId: string): Promise<FishingAttempt> {
+    const attempt = this.attempts.get(attemptId);
+    if (!attempt || attempt.status !== 'BITING') {
+      throw new Error('Invalid attempt or wrong status');
+    }
+
+    attempt.status = 'REELING';
+    this.attempts.set(attemptId, attempt);
+    this.emit('fishing:status-changed', { attemptId, status: 'REELING' });
+
+    // Start reeling minigame
+    this.startReelingMinigame(attempt);
+
+    return attempt;
+  }
+
+  private startReelingMinigame(attempt: FishingAttempt): void {
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+      if (attempt.status !== 'REELING') {
+        clearInterval(progressInterval);
+        return;
       }
-    }, 3000); // 3 seconds to react
-  }
 
-  async hook(sessionId: string): Promise<void> {
-    const session = this.sessions.get(sessionId);
-    if (!session || session.status !== 'waiting') {
-      throw new Error('Invalid fishing session');
-    }
-
-    const fish = this.fish.get(session.fishId!);
-    if (!fish) {
-      throw new Error('Fish not found');
-    }
-
-    session.status = 'minigame';
-    this.sessions.set(sessionId, session);
-    this.emit('fishingMinigameStarted', { session, fish });
-  }
-
-  async updateMinigame(
-    sessionId: string,
-    progress: number
-  ): Promise<{ completed: boolean; success: boolean }> {
-    const session = this.sessions.get(sessionId);
-    if (!session || session.status !== 'minigame') {
-      throw new Error('Invalid fishing session');
-    }
-
-    const fish = this.fish.get(session.fishId!);
-    if (!fish) {
-      throw new Error('Fish not found');
-    }
-
-    session.progress = Math.min(100, Math.max(0, progress));
-    this.sessions.set(sessionId, session);
-
-    if (session.progress >= 100) {
-      await this.completeFishing(sessionId, true);
-      return { completed: true, success: true };
-    } else if (session.progress <= 0) {
-      await this.completeFishing(sessionId, false);
-      return { completed: true, success: false };
-    }
-
-    return { completed: false, success: false };
-  }
-
-  private async completeFishing(sessionId: string, success: boolean): Promise<void> {
-    const session = this.sessions.get(sessionId);
-    if (!session) {
-      throw new Error('Session not found');
-    }
-
-    const spot = this.spots.get(session.spotId);
-    if (!spot) {
-      throw new Error('Spot not found');
-    }
-
-    session.status = success ? 'completed' : 'failed';
-    session.endTime = new Date();
-    this.sessions.set(sessionId, session);
-
-    // Remove user from spot
-    spot.currentFishers = spot.currentFishers.filter(id => id !== session.userId);
-    this.spots.set(spot.id, spot);
-
-    if (success && session.fishId) {
-      const fish = this.fish.get(session.fishId);
-      if (fish) {
-        // Add fish to inventory
-        // This would integrate with your inventory system
-
-        // Update user stats
-        await this.updateStats(session.userId, fish);
-
-        this.emit('fishingCompleted', { session, fish });
-      }
-    } else {
-      this.emit('fishingFailed', { session, reason: 'Minigame failed' });
-    }
-  }
-
-  private async calculateCatch(spot: FishingSpot, session: FishingSession): Promise<Fish | null> {
-    const availableFish = spot.availableFish
-      .map(id => this.fish.get(id))
-      .filter((fish): fish is Fish => fish !== undefined)
-      .filter(fish => {
-        // Check season
-        const currentSeason = this.getCurrentSeason();
-        if (fish.season !== 'all' && fish.season !== currentSeason) {
-          return false;
-        }
-
-        // Check time of day
-        const currentTime = this.getTimeOfDay();
-        if (fish.timeOfDay !== 'any' && fish.timeOfDay !== currentTime) {
-          return false;
-        }
-
-        // Check requirements
-        const stats = this.userStats.get(session.userId);
-        if (!stats || stats.skillLevel < fish.requirements.level) {
-          return false;
-        }
-
-        if (fish.requirements.rod && session.rodId !== fish.requirements.rod) {
-          return false;
-        }
-
-        if (fish.requirements.bait && session.baitId !== fish.requirements.bait) {
-          return false;
-        }
-
-        return true;
+      progress += Math.random() * 10;
+      attempt.progress = Math.min(100, progress);
+      this.attempts.set(attempt.id, attempt);
+      this.emit('fishing:progress', {
+        attemptId: attempt.id,
+        progress: attempt.progress
       });
 
+      if (attempt.progress >= 100) {
+        clearInterval(progressInterval);
+        this.completeAttempt(attempt);
+      }
+    }, 500);
+  }
+
+  private async completeAttempt(attempt: FishingAttempt): Promise<void> {
+    const spot = this.spots.get(attempt.spotId);
+    if (!spot) return;
+
+    // Calculate catch result
+    const result = this.calculateCatchResult(spot);
+    attempt.status = 'COMPLETED';
+    attempt.endedAt = new Date().toISOString();
+    attempt.result = result;
+
+    // Update spot cooldown
+    spot.lastFished = new Date().toISOString();
+    this.spots.set(spot.id, spot);
+
+    // Update user stats
+    if (result.success) {
+      this.updateUserStats(attempt.userId, result);
+    }
+
+    this.attempts.set(attempt.id, attempt);
+    this.emit('fishing:completed', { attemptId: attempt.id, result });
+  }
+
+  private failAttempt(attempt: FishingAttempt): void {
+    attempt.status = 'FAILED';
+    attempt.endedAt = new Date().toISOString();
+    attempt.result = {
+      success: false,
+      experience: 1
+    };
+
+    this.attempts.set(attempt.id, attempt);
+    this.emit('fishing:failed', { attemptId: attempt.id });
+  }
+
+  private calculateCatchResult(spot: FishingSpot): FishingResult {
+    const availableFish = spot.availableFish.filter(fish =>
+      fish.season.includes(this.currentSeason) &&
+      fish.timeOfDay.includes(this.currentTime)
+    );
+
     if (availableFish.length === 0) {
-      return null;
+      return { success: false, experience: 1 };
     }
 
-    // Calculate catch chances based on rarity and other factors
-    const totalWeight = availableFish.reduce((sum, fish) => {
-      let weight = 1;
-      switch (fish.rarity) {
-        case 'common': weight = 100; break;
-        case 'uncommon': weight = 50; break;
-        case 'rare': weight = 20; break;
-        case 'epic': weight = 5; break;
-        case 'legendary': weight = 1; break;
-      }
-      return sum + weight;
-    }, 0);
+    // Calculate catch probabilities based on rarity
+    const rarityWeights = {
+      COMMON: 100,
+      UNCOMMON: 60,
+      RARE: 30,
+      EPIC: 15,
+      LEGENDARY: 5,
+      MYTHICAL: 1
+    };
 
-    let random = Math.random() * totalWeight;
-    for (const fish of availableFish) {
-      let weight = 1;
-      switch (fish.rarity) {
-        case 'common': weight = 100; break;
-        case 'uncommon': weight = 50; break;
-        case 'rare': weight = 20; break;
-        case 'epic': weight = 5; break;
-        case 'legendary': weight = 1; break;
-      }
-      random -= weight;
-      if (random <= 0) {
-        return fish;
-      }
+    const weightedFish = availableFish.map(fish => ({
+      fish,
+      weight: rarityWeights[fish.rarity]
+    }));
+
+    const totalWeight = weightedFish.reduce((sum, f) => sum + f.weight, 0);
+    const random = Math.random() * totalWeight;
+
+    let currentWeight = 0;
+    const caughtFish = weightedFish.find(({ weight }) => {
+      currentWeight += weight;
+      return random <= currentWeight;
+    })?.fish;
+
+    if (!caughtFish) {
+      return { success: false, experience: 1 };
     }
 
-    return availableFish[0];
+    // Calculate size and weight
+    const size = caughtFish.size.min +
+      Math.random() * (caughtFish.size.max - caughtFish.size.min);
+    const weight = caughtFish.weight.min +
+      Math.random() * (caughtFish.weight.max - caughtFish.weight.min);
+
+    // Calculate quality
+    let quality: CatchQuality = 'NORMAL';
+    const qualityRoll = Math.random();
+    if (qualityRoll > 0.95) quality = 'PERFECT';
+    else if (qualityRoll > 0.85) quality = 'GREAT';
+    else if (qualityRoll > 0.70) quality = 'GOOD';
+    else if (qualityRoll < 0.15) quality = 'POOR';
+
+    // Calculate experience
+    const baseExperience = caughtFish.value;
+    const qualityMultiplier = {
+      POOR: 0.5,
+      NORMAL: 1,
+      GOOD: 1.2,
+      GREAT: 1.5,
+      PERFECT: 2
+    }[quality];
+
+    return {
+      success: true,
+      fish: caughtFish,
+      size,
+      weight,
+      quality,
+      experience: Math.round(baseExperience * qualityMultiplier)
+    };
   }
 
-  private getCurrentSeason(): Fish['season'] {
-    const month = new Date().getMonth();
-    if (month >= 2 && month <= 4) return 'spring';
-    if (month >= 5 && month <= 7) return 'summer';
-    if (month >= 8 && month <= 10) return 'fall';
-    return 'winter';
-  }
+  private updateUserStats(
+    userId: string,
+    result: FishingResult
+  ): void {
+    if (!result.success || !result.fish) return;
 
-  private getTimeOfDay(): Fish['timeOfDay'] {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour < 7) return 'dawn';
-    if (hour >= 7 && hour < 18) return 'day';
-    if (hour >= 18 && hour < 20) return 'dusk';
-    return 'night';
-  }
-
-  private async updateStats(userId: string, fish: Fish): Promise<void> {
     let stats = this.userStats.get(userId);
     if (!stats) {
       stats = {
         totalCatches: 0,
-        rarityCount: {},
+        rarityCount: {} as Record<string, number>,
+        typeCount: {} as Record<string, number>,
         biggestCatch: {
-          fishId: fish.id,
-          size: fish.size.min,
-          weight: fish.weight.min,
-          timestamp: new Date()
+          fish: result.fish,
+          size: result.size!,
+          weight: result.weight!
         },
-        favoriteSpot: {
-          spotId: '',
-          visits: 0
-        },
-        skillLevel: 1,
-        experience: 0,
+        totalValue: 0,
+        perfectCatches: 0,
+        specialCatches: 0,
         achievements: []
       };
     }
 
     stats.totalCatches++;
-    stats.rarityCount[fish.rarity] = (stats.rarityCount[fish.rarity] || 0) + 1;
-    stats.experience += fish.experience;
+    stats.rarityCount[result.fish.rarity] =
+      (stats.rarityCount[result.fish.rarity] || 0) + 1;
+    stats.typeCount[result.fish.type] =
+      (stats.typeCount[result.fish.type] || 0) + 1;
+    stats.totalValue += result.fish.value;
 
-    // Update skill level
-    const newLevel = Math.floor(Math.sqrt(stats.experience / 100)) + 1;
-    if (newLevel > stats.skillLevel) {
-      stats.skillLevel = newLevel;
-      this.emit('levelUp', { userId, level: newLevel });
+    if (result.quality === 'PERFECT') {
+      stats.perfectCatches++;
     }
 
-    // Update biggest catch if applicable
-    const size = Math.random() * (fish.size.max - fish.size.min) + fish.size.min;
-    const weight = Math.random() * (fish.weight.max - fish.weight.min) + fish.weight.min;
-    if (size > stats.biggestCatch.size || weight > stats.biggestCatch.weight) {
+    if (result.fish.specialEffects.length > 0) {
+      stats.specialCatches++;
+    }
+
+    if (
+      result.size! > stats.biggestCatch.size ||
+      (result.size! === stats.biggestCatch.size &&
+        result.weight! > stats.biggestCatch.weight)
+    ) {
       stats.biggestCatch = {
-        fishId: fish.id,
-        size,
-        weight,
-        timestamp: new Date()
+        fish: result.fish,
+        size: result.size!,
+        weight: result.weight!
       };
     }
 
+    // Check for achievements
+    this.checkAchievements(stats);
+
     this.userStats.set(userId, stats);
-    this.emit('statsUpdated', { userId, stats });
   }
 
-  async getStats(userId: string): Promise<FishingStats> {
+  private checkAchievements(stats: FishingStats): void {
+    const newAchievements: string[] = [];
+
+    if (stats.totalCatches >= 100 && !stats.achievements.includes('CENTURY_FISHER')) {
+      newAchievements.push('CENTURY_FISHER');
+    }
+
+    if (stats.perfectCatches >= 10 && !stats.achievements.includes('PERFECT_FISHER')) {
+      newAchievements.push('PERFECT_FISHER');
+    }
+
+    if (
+      stats.rarityCount['LEGENDARY'] >= 1 &&
+      !stats.achievements.includes('LEGENDARY_CATCH')
+    ) {
+      newAchievements.push('LEGENDARY_CATCH');
+    }
+
+    stats.achievements.push(...newAchievements);
+  }
+
+  public async getSpots(): Promise<FishingSpot[]> {
+    return Array.from(this.spots.values());
+  }
+
+  public async getAttempt(attemptId: string): Promise<FishingAttempt | undefined> {
+    return this.attempts.get(attemptId);
+  }
+
+  public async getUserStats(userId: string): Promise<FishingStats> {
     return (
       this.userStats.get(userId) || {
         totalCatches: 0,
         rarityCount: {},
-        biggestCatch: {
-          fishId: '',
-          size: 0,
-          weight: 0,
-          timestamp: new Date()
-        },
-        favoriteSpot: {
-          spotId: '',
-          visits: 0
-        },
-        skillLevel: 1,
-        experience: 0,
+        typeCount: {},
+        biggestCatch: null,
+        totalValue: 0,
+        perfectCatches: 0,
+        specialCatches: 0,
         achievements: []
       }
     );
   }
 
-  async getFishingSpots(): Promise<FishingSpot[]> {
-    return Array.from(this.spots.values());
-  }
-
-  async getAvailableFish(): Promise<Fish[]> {
-    return Array.from(this.fish.values());
-  }
-
-  async getSession(sessionId: string): Promise<FishingSession | null> {
-    return this.sessions.get(sessionId) || null;
-  }
-
-  onFishingStarted(callback: (data: { session: FishingSession; spot: FishingSpot }) => void) {
-    this.on('fishingStarted', callback);
-  }
-
-  onFishBit(callback: (data: { session: FishingSession; fish: Fish }) => void) {
-    this.on('fishBit', callback);
-  }
-
-  onFishingMinigameStarted(callback: (data: { session: FishingSession; fish: Fish }) => void) {
-    this.on('fishingMinigameStarted', callback);
-  }
-
-  onFishingCompleted(callback: (data: { session: FishingSession; fish: Fish }) => void) {
-    this.on('fishingCompleted', callback);
-  }
-
-  onFishingFailed(callback: (data: { session: FishingSession; reason: string }) => void) {
-    this.on('fishingFailed', callback);
-  }
-
-  onSpotRespawned(callback: (spot: FishingSpot) => void) {
-    this.on('spotRespawned', callback);
-  }
-
-  onLevelUp(callback: (data: { userId: string; level: number }) => void) {
-    this.on('levelUp', callback);
-  }
-
-  onStatsUpdated(callback: (data: { userId: string; stats: FishingStats }) => void) {
-    this.on('statsUpdated', callback);
+  public getCurrentConditions(): {
+    season: Season;
+    time: TimeOfDay;
+    weather: WeatherEffect;
+  } {
+    return {
+      season: this.currentSeason,
+      time: this.currentTime,
+      weather: this.currentWeather
+    };
   }
 }
-
-export const fishingService = FishingService.getInstance(
-  new CraftingService(null as any), // Pass proper SocketIO instance
-  new MiniGameService(),
-  new InventoryService()
-);

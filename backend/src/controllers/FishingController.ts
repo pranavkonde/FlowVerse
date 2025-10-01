@@ -1,171 +1,96 @@
 import { Request, Response } from 'express';
-import { fishingService } from '../services/FishingService';
+import { FishingService } from '../services/FishingService';
 
 export class FishingController {
-  async startFishing(req: Request, res: Response) {
+  private fishingService: FishingService;
+
+  constructor(fishingService: FishingService) {
+    this.fishingService = fishingService;
+  }
+
+  public async getSpots(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
+      const spots = await this.fishingService.getSpots();
+      res.json(spots);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch fishing spots' });
+    }
+  }
 
-      const { spotId, rodId, baitId } = req.body;
+  public async startFishing(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user.id;
+      const { spotId, equipment } = req.body;
+
       if (!spotId) {
-        return res.status(400).json({ error: 'Fishing spot ID is required' });
+        res.status(400).json({ error: 'Spot ID is required' });
+        return;
       }
 
-      const session = await fishingService.startFishing(
+      const attempt = await this.fishingService.startFishing(
         userId,
         spotId,
-        rodId,
-        baitId
+        equipment
       );
-
-      return res.json(session);
+      res.json(attempt);
     } catch (error) {
-      console.error('Error starting fishing:', error);
-      return res.status(500).json({ error: error.message || 'Internal server error' });
+      res.status(500).json({ error: 'Failed to start fishing' });
     }
   }
 
-  async cast(req: Request, res: Response) {
+  public async respondToBite(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const { attemptId } = req.params;
+
+      if (!attemptId) {
+        res.status(400).json({ error: 'Attempt ID is required' });
+        return;
       }
 
-      const { sessionId } = req.params;
-      if (!sessionId) {
-        return res.status(400).json({ error: 'Session ID is required' });
-      }
-
-      const session = await fishingService.getSession(sessionId);
-      if (!session || session.userId !== userId) {
-        return res.status(403).json({ error: 'Invalid session' });
-      }
-
-      await fishingService.cast(sessionId);
-      return res.json({ success: true });
+      const attempt = await this.fishingService.respondToBite(attemptId);
+      res.json(attempt);
     } catch (error) {
-      console.error('Error casting line:', error);
-      return res.status(500).json({ error: error.message || 'Internal server error' });
+      res.status(500).json({ error: 'Failed to respond to bite' });
     }
   }
 
-  async hook(req: Request, res: Response) {
+  public async getAttempt(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      const { attemptId } = req.params;
+
+      if (!attemptId) {
+        res.status(400).json({ error: 'Attempt ID is required' });
+        return;
       }
 
-      const { sessionId } = req.params;
-      if (!sessionId) {
-        return res.status(400).json({ error: 'Session ID is required' });
+      const attempt = await this.fishingService.getAttempt(attemptId);
+      if (!attempt) {
+        res.status(404).json({ error: 'Attempt not found' });
+        return;
       }
 
-      const session = await fishingService.getSession(sessionId);
-      if (!session || session.userId !== userId) {
-        return res.status(403).json({ error: 'Invalid session' });
-      }
-
-      await fishingService.hook(sessionId);
-      return res.json({ success: true });
+      res.json(attempt);
     } catch (error) {
-      console.error('Error hooking fish:', error);
-      return res.status(500).json({ error: error.message || 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch attempt' });
     }
   }
 
-  async updateMinigame(req: Request, res: Response) {
+  public async getUserStats(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
-      const { sessionId } = req.params;
-      const { progress } = req.body;
-      if (!sessionId || typeof progress !== 'number') {
-        return res.status(400).json({ error: 'Session ID and progress are required' });
-      }
-
-      const session = await fishingService.getSession(sessionId);
-      if (!session || session.userId !== userId) {
-        return res.status(403).json({ error: 'Invalid session' });
-      }
-
-      const result = await fishingService.updateMinigame(sessionId, progress);
-      return res.json(result);
+      const userId = req.user.id;
+      const stats = await this.fishingService.getUserStats(userId);
+      res.json(stats);
     } catch (error) {
-      console.error('Error updating minigame:', error);
-      return res.status(500).json({ error: error.message || 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch user stats' });
     }
   }
 
-  async getFishingSpots(req: Request, res: Response) {
+  public async getCurrentConditions(req: Request, res: Response): Promise<void> {
     try {
-      const spots = await fishingService.getFishingSpots();
-      return res.json(spots);
+      const conditions = this.fishingService.getCurrentConditions();
+      res.json(conditions);
     } catch (error) {
-      console.error('Error getting fishing spots:', error);
-      return res.status(500).json({ error: 'Internal server error' });
-    }
-  }
-
-  async getAvailableFish(req: Request, res: Response) {
-    try {
-      const fish = await fishingService.getAvailableFish();
-      return res.json(fish);
-    } catch (error) {
-      console.error('Error getting available fish:', error);
-      return res.status(500).json({ error: 'Internal server error' });
-    }
-  }
-
-  async getStats(req: Request, res: Response) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
-      const stats = await fishingService.getStats(userId);
-      return res.json(stats);
-    } catch (error) {
-      console.error('Error getting fishing stats:', error);
-      return res.status(500).json({ error: 'Internal server error' });
-    }
-  }
-
-  async getSession(req: Request, res: Response) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
-      const { sessionId } = req.params;
-      if (!sessionId) {
-        return res.status(400).json({ error: 'Session ID is required' });
-      }
-
-      const session = await fishingService.getSession(sessionId);
-      if (!session) {
-        return res.status(404).json({ error: 'Session not found' });
-      }
-
-      if (session.userId !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
-      }
-
-      return res.json(session);
-    } catch (error) {
-      console.error('Error getting fishing session:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch current conditions' });
     }
   }
 }
-
-export const fishingController = new FishingController();
